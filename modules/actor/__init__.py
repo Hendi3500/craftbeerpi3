@@ -1,5 +1,5 @@
 import time
-from flask_classy import route
+from modules.core.classy import route
 from modules import DBModel, cbpi
 from modules.core.baseview import BaseView
 

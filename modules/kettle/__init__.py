@@ -1,5 +1,5 @@
 from flask import request
-from flask_classy import FlaskView, route
+from modules.core.classy import FlaskView, route
 from modules import cbpi, socketio
 from modules.core.baseview import BaseView
 from modules.core.db import DBModel
@@ -86,7 +86,7 @@ def read_target_temps(api):
     :return: None
     """
     result = {}
-    for key, value in cbpi.cache.get("kettle").iteritems():
+    for key, value in cbpi.cache.get("kettle").items():
         cbpi.save_to_file(key, value.target_temp, prefix="kettle")
 
 @cbpi.initalizer()

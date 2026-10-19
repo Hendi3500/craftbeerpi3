@@ -1,6 +1,6 @@
 import yaml
 from flask import json, url_for, Response
-from flask_classy import FlaskView, route
+from modules.core.classy import FlaskView, route
 from git import Repo, Git
 
 from modules.app_config import cbpi
@@ -109,7 +109,7 @@ class SystemView(FlaskView):
         vf = self.api.app.view_functions
 
         for f in self.api.app.view_functions:
-            print  f
+            print(f)
         endpoints = {}
         re =  {
             "swagger": "2.0",
@@ -131,7 +131,7 @@ class SystemView(FlaskView):
 
         with open("config/version.yaml", 'r') as stream:
 
-            y = yaml.load(stream)
+            y = yaml.safe_load(stream)
         pprint.pprint(y)
         pprint.pprint(re)
         return Response(yaml.dump(re), mimetype='text/yaml')

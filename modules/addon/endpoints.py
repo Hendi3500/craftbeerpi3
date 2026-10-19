@@ -68,7 +68,7 @@ def createPlugin(name):
     if not os.path.exists("./modules/plugins/"+name):
         os.makedirs("./modules/plugins/"+name)
         with open("./modules/plugins/" + name + "/__init__.py", "wb") as fo:
-            fo.write("")
+            fo.write(b"")
         cbpi.emit_message("PLUGIN %s CREATED" % (name))
         return ('', 204)
     else:
@@ -133,8 +133,8 @@ def plugins():
     :return:
     """
     response = requests.get("https://raw.githubusercontent.com/Manuel83/craftbeerpi-plugins/master/plugins.yaml")
-    cbpi.cache["plugins"] = merge(yaml.load(response.text), cbpi.cache["plugins"])
-    for key, value in  cbpi.cache["plugins"].iteritems():
+    cbpi.cache["plugins"] = merge(yaml.safe_load(response.text), cbpi.cache["plugins"])
+    for key, value in  cbpi.cache["plugins"].items():
         value["installed"] = os.path.isdir("./modules/plugins/%s/" % (key))
 
     return json.dumps(cbpi.cache["plugins"])

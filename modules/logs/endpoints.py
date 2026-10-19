@@ -1,7 +1,7 @@
 import datetime
 import os
 from flask import Blueprint, request, send_from_directory, json
-from flask_classy import FlaskView, route
+from modules.core.classy import FlaskView, route
 from modules import cbpi
 
 
@@ -19,10 +19,13 @@ class LogView(FlaskView):
     def actions(self):
         filename = "./logs/action.log"
         if os.path.isfile(filename) == False:
-            return
+            return json.dumps([])
         import csv
         array = []
-        with open(filename, 'rb') as f:
+        # Textmodus: der CSV-Parser in Python 3 verlangt Strings. Im
+        # Binaermodus liefert er Bytes und bricht mit
+        # "_csv.Error: iterator should return strings, not bytes" ab.
+        with open(filename, 'r', newline='') as f:
             reader = csv.reader(f)
             for row in reader:
                 try:
@@ -52,11 +55,12 @@ class LogView(FlaskView):
     def read_log_as_json(self, type, id):
         filename = "./logs/%s_%s.log" % (type, id)
         if os.path.isfile(filename) == False:
-            return
+            return []
 
         import csv
         array = []
-        with open(filename, 'rb') as f:
+        # Textmodus, siehe actions() - der CSV-Parser verlangt Strings.
+        with open(filename, 'r', newline='') as f:
             reader = csv.reader(f)
             for row in reader:
                 try:
@@ -78,11 +82,15 @@ class LogView(FlaskView):
 
         if t == "k":
             kettle = cbpi.cache.get("kettle").get(id)
-            result = map(self.convert_chart_data_to_json, cbpi.get_controller(kettle.logic).get("class").chart(kettle))
+            # list(): map() liefert in Python 3 einen Iterator, den json.dumps
+            # nicht serialisieren kann.
+            result = [self.convert_chart_data_to_json(x)
+                      for x in cbpi.get_controller(kettle.logic).get("class").chart(kettle)]
 
         if t == "f":
             fermenter = cbpi.cache.get("fermenter").get(id)
-            result = map(self.convert_chart_data_to_json, cbpi.get_fermentation_controller(fermenter.logic).get("class").chart(fermenter))
+            result = [self.convert_chart_data_to_json(x)
+                      for x in cbpi.get_fermentation_controller(fermenter.logic).get("class").chart(fermenter)]
 
         return json.dumps(result)
 
@@ -91,7 +99,8 @@ class LogView(FlaskView):
     def download(self, file):
         if not self.check_filename(file):
             return ('File Not Found', 404)
-        return send_from_directory('../logs', file, as_attachment=True, attachment_filename=file)
+        # download_name: attachment_filename wurde in Flask 2.2 entfernt.
+        return send_from_directory('../logs', file, as_attachment=True, download_name=file)
 
     def check_filename(self, name):
         import re

@@ -1,5 +1,5 @@
 import json
-from flask_classy import FlaskView, route
+from modules.core.classy import FlaskView, route
 from modules import cbpi
 class NotificationView(FlaskView):
 
@@ -24,7 +24,7 @@ class NotificationView(FlaskView):
                 cbpi.cache["messages"].pop(idx)
         return ('', 204)
 
-@cbpi.event("MESSAGE", async=True)
+@cbpi.event("MESSAGE", async_=True)
 def messageEvent(message, **kwargs):
     """
     React on message event. add the message to the cache and push the message to the clients

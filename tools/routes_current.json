@@ -1,0 +1,751 @@
+[
+  {
+    "endpoint": "index",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/"
+  },
+  {
+    "endpoint": "ActorView:getAll",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/actor/"
+  },
+  {
+    "endpoint": "ActorView:post",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/actor/"
+  },
+  {
+    "endpoint": "ActorView:toggleTime",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/actor/<id>/toggle/<int:t>"
+  },
+  {
+    "endpoint": "ActorView:delete",
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/api/actor/<int:id>"
+  },
+  {
+    "endpoint": "ActorView:getOne",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/actor/<int:id>"
+  },
+  {
+    "endpoint": "ActorView:put",
+    "methods": [
+      "PUT"
+    ],
+    "rule": "/api/actor/<int:id>"
+  },
+  {
+    "endpoint": "ActorView:action",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/actor/<int:id>/action/<method>"
+  },
+  {
+    "endpoint": "ActorView:power",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/actor/<int:id>/power/<int:power>"
+  },
+  {
+    "endpoint": "ActorView:off",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/actor/<int:id>/switch/off"
+  },
+  {
+    "endpoint": "ActorView:on",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/actor/<int:id>/switch/on"
+  },
+  {
+    "endpoint": "ActorView:toggle",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/actor/<int:id>/toggle"
+  },
+  {
+    "endpoint": "ActorView:toggleTimeJob",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/actor/toggleTimeJob/<id>/<t>"
+  },
+  {
+    "endpoint": "BeerXMLImport:get",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/beerxml/"
+  },
+  {
+    "endpoint": "BeerXMLImport:load",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/beerxml/<int:id>"
+  },
+  {
+    "endpoint": "BeerXMLImport:allowed_file",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/beerxml/allowed_file/<filename>"
+  },
+  {
+    "endpoint": "BeerXMLImport:getBoilAlerts",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/beerxml/getBoilAlerts/<id>"
+  },
+  {
+    "endpoint": "BeerXMLImport:getBoilTime",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/beerxml/getBoilTime/<id>"
+  },
+  {
+    "endpoint": "BeerXMLImport:getRecipeName",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/beerxml/getRecipeName/<id>"
+  },
+  {
+    "endpoint": "BeerXMLImport:getSteps",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/beerxml/getSteps/<id>"
+  },
+  {
+    "endpoint": "BeerXMLImport:upload_file",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/beerxml/upload"
+  },
+  {
+    "endpoint": "ConfigView:getAll",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/config/"
+  },
+  {
+    "endpoint": "ConfigView:post",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/config/"
+  },
+  {
+    "endpoint": "ConfigView:delete",
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/api/config/<id>"
+  },
+  {
+    "endpoint": "ConfigView:getOne",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/config/<id>"
+  },
+  {
+    "endpoint": "ConfigView:put",
+    "methods": [
+      "PUT"
+    ],
+    "rule": "/api/config/<name>"
+  },
+  {
+    "endpoint": "addon.getPlugins",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/editor/"
+  },
+  {
+    "endpoint": "addon.deletePlugin",
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/api/editor/<name>"
+  },
+  {
+    "endpoint": "addon.getFile",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/editor/<name>"
+  },
+  {
+    "endpoint": "addon.saveFile",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/editor/<name>"
+  },
+  {
+    "endpoint": "addon.createPlugin",
+    "methods": [
+      "PUT"
+    ],
+    "rule": "/api/editor/<name>"
+  },
+  {
+    "endpoint": "addon.download_addon",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/editor/<name>/download"
+  },
+  {
+    "endpoint": "addon.reload",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/editor/<name>/reload/"
+  },
+  {
+    "endpoint": "addon.update_addon",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/editor/<name>/update"
+  },
+  {
+    "endpoint": "addon.plugins",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/editor/list"
+  },
+  {
+    "endpoint": "FermenterView:getAll",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/fermenter/"
+  },
+  {
+    "endpoint": "FermenterView:post",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/fermenter/"
+  },
+  {
+    "endpoint": "FermenterView:delete",
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/api/fermenter/<int:id>"
+  },
+  {
+    "endpoint": "FermenterView:getOne",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/fermenter/<int:id>"
+  },
+  {
+    "endpoint": "FermenterView:put",
+    "methods": [
+      "PUT"
+    ],
+    "rule": "/api/fermenter/<int:id>"
+  },
+  {
+    "endpoint": "FermenterView:toggle",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/fermenter/<int:id>/automatic"
+  },
+  {
+    "endpoint": "FermenterView:postBrewName",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/fermenter/<int:id>/brewname"
+  },
+  {
+    "endpoint": "FermenterView:reset",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/fermenter/<int:id>/reset"
+  },
+  {
+    "endpoint": "FermenterView:start_fermentation",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/fermenter/<int:id>/start"
+  },
+  {
+    "endpoint": "FermenterView:postStep",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/fermenter/<int:id>/step"
+  },
+  {
+    "endpoint": "FermenterView:deleteStep",
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/api/fermenter/<int:id>/step/<int:stepid>"
+  },
+  {
+    "endpoint": "FermenterView:putStep",
+    "methods": [
+      "PUT"
+    ],
+    "rule": "/api/fermenter/<int:id>/step/<int:stepid>"
+  },
+  {
+    "endpoint": "FermenterView:postTargetTemp",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/fermenter/<int:id>/targettemp/<temp>"
+  },
+  {
+    "endpoint": "FermenterView:check_step",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/fermenter/check_step/"
+  },
+  {
+    "endpoint": "FermenterView:get_fermenter",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/fermenter/get_fermenter/<id>"
+  },
+  {
+    "endpoint": "FermenterView:target_temp_reached",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/fermenter/target_temp_reached/<id>/<step>"
+  },
+  {
+    "endpoint": "KBH:get",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/kbh/"
+  },
+  {
+    "endpoint": "KBH:load",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/kbh/<int:id>"
+  },
+  {
+    "endpoint": "KBH:allowed_file",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/kbh/allowed_file/<filename>"
+  },
+  {
+    "endpoint": "KBH:upload_file",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/kbh/upload"
+  },
+  {
+    "endpoint": "Kettle2View:getAll",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/kettle/"
+  },
+  {
+    "endpoint": "Kettle2View:post",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/kettle/"
+  },
+  {
+    "endpoint": "Kettle2View:delete",
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/api/kettle/<int:id>"
+  },
+  {
+    "endpoint": "Kettle2View:getOne",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/kettle/<int:id>"
+  },
+  {
+    "endpoint": "Kettle2View:put",
+    "methods": [
+      "PUT"
+    ],
+    "rule": "/api/kettle/<int:id>"
+  },
+  {
+    "endpoint": "Kettle2View:toggle",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/kettle/<int:id>/automatic"
+  },
+  {
+    "endpoint": "Kettle2View:postTargetTemp",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/kettle/<int:id>/targettemp/<temp>"
+  },
+  {
+    "endpoint": "LogView:get_all_logfiles",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/logs/"
+  },
+  {
+    "endpoint": "LogView:clearlog",
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/api/logs/<file>"
+  },
+  {
+    "endpoint": "LogView:get_logs_as_json",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/logs/<t>/<int:id>"
+  },
+  {
+    "endpoint": "LogView:actions",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/logs/actions"
+  },
+  {
+    "endpoint": "LogView:check_filename",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/logs/check_filename/<name>"
+  },
+  {
+    "endpoint": "LogView:convert_chart_data_to_json",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/logs/convert_chart_data_to_json/<chart_data>"
+  },
+  {
+    "endpoint": "LogView:download",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/logs/download/<file>"
+  },
+  {
+    "endpoint": "LogView:read_log_as_json",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/logs/read_log_as_json/<type>/<id>"
+  },
+  {
+    "endpoint": "NotificationView:getMessages",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/notification/"
+  },
+  {
+    "endpoint": "NotificationView:dismiss",
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/api/notification/<id>"
+  },
+  {
+    "endpoint": "one_wire.set_temp",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/one_wire/<int:t>"
+  },
+  {
+    "endpoint": "RESTImport:load",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/recipe/import/v1/"
+  },
+  {
+    "endpoint": "SensorView:getAll",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/sensor/"
+  },
+  {
+    "endpoint": "SensorView:post",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/sensor/"
+  },
+  {
+    "endpoint": "SensorView:delete",
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/api/sensor/<int:id>"
+  },
+  {
+    "endpoint": "SensorView:getOne",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/sensor/<int:id>"
+  },
+  {
+    "endpoint": "SensorView:put",
+    "methods": [
+      "PUT"
+    ],
+    "rule": "/api/sensor/<int:id>"
+  },
+  {
+    "endpoint": "SensorView:action",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/sensor/<int:id>/action/<method>"
+  },
+  {
+    "endpoint": "StepView:deleteAll",
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/api/step/"
+  },
+  {
+    "endpoint": "StepView:getAll",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/step/"
+  },
+  {
+    "endpoint": "StepView:post",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/step/"
+  },
+  {
+    "endpoint": "StepView:delete",
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/api/step/<int:id>"
+  },
+  {
+    "endpoint": "StepView:getOne",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/step/<int:id>"
+  },
+  {
+    "endpoint": "StepView:put",
+    "methods": [
+      "PUT"
+    ],
+    "rule": "/api/step/<int:id>"
+  },
+  {
+    "endpoint": "StepView:action",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/step/action/<method>"
+  },
+  {
+    "endpoint": "StepView:init_step",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/step/init_step/<step>"
+  },
+  {
+    "endpoint": "StepView:start_1",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/step/next"
+  },
+  {
+    "endpoint": "StepView:reset",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/step/reset"
+  },
+  {
+    "endpoint": "StepView:resetCurrentStep",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/step/reset/current"
+  },
+  {
+    "endpoint": "StepView:sort_steps",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/step/sort"
+  },
+  {
+    "endpoint": "StepView:start_0",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/step/start"
+  },
+  {
+    "endpoint": "StepView:stop_step",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/step/stop_step/"
+  },
+  {
+    "endpoint": "SystemView:check_update",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/system/check_update"
+  },
+  {
+    "endpoint": "SystemView:doReboot",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/system/doReboot/"
+  },
+  {
+    "endpoint": "SystemView:doShutdown",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/system/doShutdown/"
+  },
+  {
+    "endpoint": "SystemView:dump",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/system/dump"
+  },
+  {
+    "endpoint": "SystemView:endpoints",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/system/endpoints"
+  },
+  {
+    "endpoint": "SystemView:update",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/system/git/pull"
+  },
+  {
+    "endpoint": "SystemView:git_status",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/system/git/status"
+  },
+  {
+    "endpoint": "SystemView:reboot",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/system/reboot"
+  },
+  {
+    "endpoint": "SystemView:shutdown",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/system/shutdown"
+  },
+  {
+    "endpoint": "SystemView:checkout_tag",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/system/tags/<name>"
+  },
+  {
+    "endpoint": "static",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/static/<path:filename>"
+  },
+  {
+    "endpoint": "react.index",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/ui/"
+  },
+  {
+    "endpoint": "react.static",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/ui/static/<path:filename>"
+  }
+]

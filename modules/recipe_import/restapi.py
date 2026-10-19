@@ -1,5 +1,5 @@
 from flask import json, request
-from flask_classy import FlaskView, route
+from modules.core.classy import FlaskView, route
 from git import Repo, Git
 import sqlite3
 from modules.app_config import cbpi

@@ -1,5 +1,5 @@
 from flask import json, request
-from flask_classy import FlaskView, route
+from modules.core.classy import FlaskView, route
 from git import Repo, Git
 import sqlite3
 from modules.app_config import cbpi
@@ -29,7 +29,7 @@ class KBH(FlaskView):
                 result.append({"id": row[0], "name": row[1], "brewed": row[2]})
             return json.dumps(result)
         except Exception as e:
-            print e
+            print(e)
             self.api.notify(headline="Failed to load KHB database", message="ERROR", type="danger")
             return ('', 500)
         finally:

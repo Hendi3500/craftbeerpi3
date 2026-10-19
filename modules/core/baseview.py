@@ -1,5 +1,5 @@
 from flask import request, json
-from flask_classy import route, FlaskView
+from modules.core.classy import route, FlaskView
 from modules import cbpi
 
 
@@ -104,6 +104,6 @@ class BaseView(FlaskView):
                     cls.api.cache[cls.cache_key].append(value)
             else:
                 cls.api.cache[cls.cache_key] = {}
-                for key, value  in cls.model.get_all().iteritems():
+                for key, value  in cls.model.get_all().items():
                     cls.post_init_callback(value)
                     cls.api.cache[cls.cache_key][key] = value

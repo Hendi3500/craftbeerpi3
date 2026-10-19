@@ -1,7 +1,7 @@
 import time
 
 from flask import json, request
-from flask_classy import route
+from modules.core.classy import route
 from modules import DBModel, cbpi, get_db
 from modules.core.baseview import BaseView
 
@@ -46,7 +46,7 @@ class ConfigView(BaseView):
 
         with cls.api.app.app_context():
             cls.api.cache[cls.cache_key] = {}
-            for key, value  in cls.model.get_all().iteritems():
+            for key, value  in cls.model.get_all().items():
                 cls.post_init_callback(value)
                 cls.api.cache[cls.cache_key][value.name] = value
 

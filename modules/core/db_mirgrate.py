@@ -1,10 +1,14 @@
 import sqlite3
 import os
 from modules import  cbpi
-from db import get_db
+from modules.core.db import get_db
 
 def execute_file(curernt_version, data):
-    if curernt_version >= data["version"]:
+    # current_version ist None, wenn die Tabelle schema_info beim allerersten
+    # Start noch leer ist. Python 2 verglich None >= int und wertete das als
+    # "nicht ueberspringen", Python 3 wirft TypeError - ein frischer Start
+    # bricht ohne diese Zeile ab.
+    if curernt_version is not None and curernt_version >= data["version"]:
         cbpi.app.logger.info("SKIP DB FILE: %s" % data["file"])
         return
     try:
@@ -19,8 +23,8 @@ def execute_file(curernt_version, data):
                 conn.commit()
 
     except sqlite3.OperationalError as err:
-        print "EXCEPT"
-        print err
+        print("EXCEPT")
+        print(err)
 
 @cbpi.initalizer(order=-9999)
 def init(app=None):

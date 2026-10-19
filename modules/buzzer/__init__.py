@@ -1,5 +1,5 @@
 import time
-from thread import start_new_thread
+import threading
 from modules import cbpi
 
 try:
@@ -45,7 +45,11 @@ class Buzzer(object):
             except Exception as e:
                 pass
 
-        start_new_thread(play, (self.sound,))
+        # Python 2: thread.start_new_thread(play, (self.sound,))
+        # Python 3 kennt kein "thread"-Modul mehr, dafuer threading.Thread.
+        t = threading.Thread(target=play, args=(self.sound,))
+        t.daemon = True
+        t.start()
 
 @cbpi.initalizer(order=1)
 def init(cbpi):
