@@ -14,6 +14,10 @@ cd craftbeerpi3
 sudo ./install.sh          # legt ein virtualenv an und installiert die Pakete
 ```
 
+`install.sh` legt `.venv/` an und installiert die Pakete dorthin. Auf einem
+Raspberry Pi wird zusätzlich `rpi-lgpio` installiert — das Paket braucht die
+`lgpio`-C-Bibliothek und lässt sich nur dort bauen.
+
 Danach starten:
 
 ```bash
@@ -120,10 +124,15 @@ Standard-`MethodView` ist das Wegfallen der Trailing-Slashes.
 .venv/bin/python tools/test_socket.py         # 21 Socket.IO-Prüfungen
 .venv/bin/python tools/test_socket_e2e.py     #  9 Prüfungen mit echtem WebSocket
 .venv/bin/python tools/sweep_endpoints.py     # alle GET-Routen, nur lesend
+.venv/bin/python tools/test_gpio.py           # 34 GPIO-Prüfungen
+.venv/bin/python tools/test_system.py         # 14 System-Endpunkte
+.venv/bin/python tools/test_plugins.py        # 42 Plugin-Management
+.venv/bin/python tools/test_migration.py      # 13 SQL-Migrationen
 ```
 
-`compare_routes.py` und `sweep_endpoints.py` liefern bei Abweichung einen
-Exit-Code ungleich 0 und eignen sich damit als Gate.
+Alle Skripte liefern bei Abweichung einen Exit-Code ungleich 0 und eignen
+sich damit als Gate. `test_migration.py` arbeitet in einem eigenen
+Verzeichnis und fasst die echte Datenbank nicht an.
 
 > `sweep_endpoints.py` ruft **ausschließlich lesende** GET-Routen auf und
 > lässt Endpunkte mit Seiteneffekt aus — insbesondere `/api/system/tags/<x>`,
@@ -148,3 +157,18 @@ neue Oberfläche mit aktuellem `socket.io-client` ist der saubere Weg.
 `logs/app.log` nennt den Endpunkt und den Traceback. Häufigste Ursache ist
 ein Objekt im Cache, das der JSON-Provider nicht kennt — der Provider
 liefert für unbekannte Typen `null`, wie der ComplexEncoder aus Flask 0.12.
+
+**Die GPIO-Aktoren tun nichts**
+`rpi-lgpio` fehlt oder lässt sich nicht installieren. Auf dem Pi:
+`pip install rpi-lgpio`. Das Paket braucht die `lgpio`-C-Bibliothek und
+lässt sich nur auf dem Pi bauen.
+
+**`GET /api/system/tags/<name>` antwortet mit 409**
+Der Endpunkt verweigert den Checkout, solange der Arbeitsbaum
+uncommittete Änderungen hat — das `git reset --hard` dahinter hätte sie
+verworfen. Erst committen, dann erneut versuchen.
+
+**`CRITICAL: We need to talk about your installation`**
+Python 3.12 oder neuer auf einem System, in dem `rpi-lgpio` nicht
+gebaut werden kann. Die GPIO-Aktoren und der Buzzer brauchen das Paket;
+alles andere läuft ohne.

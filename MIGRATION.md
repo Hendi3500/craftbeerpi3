@@ -49,9 +49,9 @@ lässt Endpunkte mit Seiteneffekt explizit aus.
 | 2 | flask_classy -> eigenes Routing | **fertig** | erledigt |
 | 3 | `app.json_encoder` -> JSONProvider | **fertig** | erledigt |
 | 4 | Socket.io 5.x, eventlet raus | **fertig** | erledigt |
-| 5 | RPi.GPIO -> rpi-lgpio | offen | 0,5 Tage |
-| 6 | Async-Modell konsistent ziehen | offen | 0,5 Tage |
-| 7 | Plugin-Loading, requirements, install.sh | teilweise | 0,5 Tage |
+| 5 | RPi.GPIO -> rpi-lgpio | **fertig** | erledigt |
+| 6 | Async-Modell konsistent ziehen | **fertig** | erledigt |
+| 7 | Plugin-Loading, requirements, install.sh | **fertig** | erledigt |
 | 8 | Hardware-Test PID + 1-Wire | offen | 2–4 Tage |
 
 ### Ergänzungen aus der Wiederherstellung
@@ -75,6 +75,189 @@ behoben, die der Port ebenfalls mitgenommen hatte:
    und schlug fehl, sobald die Installation eigene Sensoren hatte. Er sucht
    jetzt den eigenen Test-Sensor und räumt ihn wieder auf.
 4. **`tools/sweep_endpoints.py`**: neu, als lesender Sweep mit Ausschlussliste.
+
+## Position 5 — RPi.GPIO -> rpi-lgpio
+
+`RPi.GPIO` wird auf Raspberry Pi OS Bookworm nicht mehr gebaut: das Paket
+nutzt `imp`-APIs, die es ab Python 3.12 nicht mehr gibt. Der Ersatz ist
+`rpi-lgpio`, das ein drop-in kompatibles `RPi.GPIO` mitbringt (0.6 hat
+`setmode`, `setup`, `output`, `input`, die Event-API und die `PWM`-Klasse
+mit `ChangeDutyCycle`/`ChangeFrequency`).
+
+Das Paket lässt sich **nur auf dem Pi** installieren (es braucht die
+`lgpio`-C-Bibliothek). Deshalb steht es in `requirements.txt` auskommentiert
+und wird in `install.sh` nur auf einem Pi nachinstalliert.
+
+**Neu: `modules/core/gpio.py`** — eine Kompatibilitätsschicht. Sie lädt
+`RPi.GPIO` (echt oder als Shim), sonst `rpi.lgpio`, sonst einen Stub.
+
+Der Stub war nicht Kosmetik. Vorher stand in den Plugins:
+
+```python
+try:
+    import RPi.GPIO as GPIO
+except Exception:
+    pass
+```
+
+Bei fehlendem GPIO war `GPIO` danach ein **undefinierter Name**. Die
+Aktor-Typen wurden trotzdem registriert und im Frontend angezeigt; der
+Fehler schlug erst in `init()` mit `NameError: name 'GPIO' is not defined`
+zu — ohne jeden Hinweis, dass die Hardware fehlt. Der Stub liefert statt
+dessen einen `RuntimeError` mit Klartext.
+
+Dazu zwei echte Fehler in `gpio_actor`:
+
+- **`GPIOPWM`**: fehlt „frequency" in der Konfiguration, ist `self.frequency`
+  die Property-Instanz und keine Zahl. `float()` darauf wirft `TypeError`.
+- **`init_actor`** in `core.py` hat die Ausnahme geschluckt und nur
+  „Initializing of Actor X failed" protokolliert. Ohne die Ausnahme lässt
+  sich ein Konfigurationsfehler nicht von fehlender Hardware unterscheiden.
+
+## Position 6 — Async-Modell und System-Endpunkte
+
+Drei Befunde, alle mit demselben Muster: ein Endpunkt mit Seiteneffekt,
+der über HTTP aufgerufen wird.
+
+**1. Herunterfahren und Neustart blockierten den Request.** `doShutdown()`
+lief im Request-Thread, schlief 5 Sekunden, rief dann `halt` auf — und
+erst danach kam `return ('', 204)`. Die Antwort kam nie an, weil der
+Rechner vorher schon ausging; der Browser sah einen Timeout. Außerdem
+wurde `call("halt")` mit einem **String** aufgerufen: auf POSIX sucht
+`subprocess` dann ein Programm namens „halt" im PATH, und „halt" ist ein
+`systemctl`-Unterbefehl, kein Programm. Der Befehl läuft jetzt als
+Hintergrundtask, die Liste wird als Liste übergeben.
+
+**2. `GET /api/system/tags/<name>` war die Ursache des Datenverlusts.**
+
+```python
+repo.git.reset('--hard')      # verwirft ALLE uncommitteten Änderungen
+g.checkout(name)
+```
+
+Ein GET darf keine Seiteneffekte haben, und ein versehentliches Aufrufen
+(Browser-Prefetch, Link im Chat, ein Test-Sweep) hat so den kompletten Port
+vernichtet. Der Endpunkt prüft jetzt:
+
+1. Der Name muss einem existierenden Tag entsprechen (sonst 404).
+2. Ist der Arbeitsbaum schmutzig, wird der Checkout **verweigert** (409).
+   Das `reset --hard` passiert nur bei sauberem Baum — dann ist es ein No-Op.
+
+Das Frontend ruft den Endpunkt per GET auf (`bundle.js`), deshalb bleibt
+das Verb unverändert. Zusätzlich abgesichert ist `tools/sweep_endpoints.py`,
+das Endpunkte mit Seiteneffekt gar nicht erst aufruft.
+
+**3. `one_wire`** benutzte als einziges Plugin einen rohen
+`threading.Thread` (ohne `daemon`) und ein blankes `except`. Der Offset war
+dieselbe Property-Falle wie bei `GPIOPWM`: fehlte „offset" in der
+Konfiguration, lieferte `float(self.offset)` einen `TypeError`, den der
+`try_catch` mit 0 quittierte — der eingestellte Offset wurde also ignoriert
+und der Log lief alle fünf Sekunden voll.
+
+## Position 7 — Plugin-Loading, requirements, install.sh
+
+**Path-Traversal im Plugin-Management.** Die Routen `/api/editor/<name>`
+nahmen den Namen ungeprüft aus dem Pfad:
+
+```
+DELETE /api/editor/../../logs
+```
+
+`deletePlugin` macht ein `shutil.rmtree` — damit ließ sich **jedes
+Verzeichnis löschen**, auf das der Prozess zugreifen konnte. Der Server
+bindet an `0.0.0.0`, ist also im LAN erreichbar. Empirisch belegt: der
+Name `../../logs` normiert auf `logs` und liegt damit außerhalb von
+`modules/plugins`.
+
+Jetzt gilt `_plugin_pfad()`: der Name muss dem Muster
+`^[A-Za-z0-9][A-Za-z0-9_.-]*$` entsprechen, höchstens 100 Zeichen lang
+sein, und der aufgelöste Pfad muss in `modules/plugins` liegen. Betroffen
+sind `getFile`, `createPlugin`, `saveFile`, `deletePlugin`, `reload_plugin`,
+`download_addon` und `update_addon`. Über HTTP greift zusätzlich das
+Routing (Werkzeug normalisiert `..` und antwortet 404) — die View-Prüfung
+ist die zweite Schicht.
+
+**`__pycache__` als installiertes Plugin.** `__pycache__` ist selbst ein
+Verzeichnis und damit vom Datei-Filter (`endswith(".py")`) nicht
+erreichbar. Es erschien in `/api/editor/` als installiertes Plugin und
+ließ sich als Namespace-Paket sogar ohne Fehler importieren — im
+Modul-Register stand also Müll.
+
+**`reload` war dreifach kaputt:** `cache` war nie definiert (NameError),
+`reload` ist in Python 3 kein Builtin mehr (NameError), und `e.message`
+gibt es seit Python 3.0 nicht mehr (AttributeError). Der Endpunkt lieferte
+also immer HTTP 500.
+
+**`download_addon`:** die `None`-Prüfung stand *hinter* dem Zugriff
+(`plugin["loading"] = True`), ein unbekannter Name lief in einen TypeError
+statt in die 404.
+
+**Die SQL-Migrationen liefen in der falschen Reihenfolge.** Das war der
+Fehler, der auf einer frischen Installation auffiel:
+
+```python
+for filename in os.listdir("./update"):   # Dateisystem-Reihenfolge!
+```
+
+`os.listdir()` liefert die Einträge in der Reihenfolge des Dateisystems,
+nicht numerisch. Auf einer frischen Installation kam so
+`3_port_config.sql` vor `1_schema_info.sql` — die erste Datei wollte in
+`schema_info` eintragen, obwohl die Tabelle noch nicht existierte. Der
+Fehler ließ die **ganze Datei** zurückrollen, und damit auch den
+`port`-Eintrag und die erweiterten Buzzer-Optionen. `schema_info` stand
+danach auf Version 1, die Dateien wurden erst beim nächsten Start
+nachgezogen.
+
+Die Fehler wurden mit `print()` auf stdout geschrieben, nicht ins Log — in
+`logs/app.log` stand nichts, nur „EXCEPT" auf der Konsole.
+
+Die Dateien werden jetzt nach ihrer Versionsnummer sortiert, die
+Migrationslogik nutzt dieselbe Datenbankverbindung wie der Rest, und
+Fehler gehen ins Log. `tools/test_migration.py` prüft den ganzen Ablauf:
+frische Installation, zweiter Start, Upgrade mit neuer Datei, kaputte Datei.
+
+**`install.sh` war Python 2:**
+
+```
+apt-get install python-setuptools; easy_install pip;
+apt-get install python-dev; pip install -r requirements.txt
+```
+
+`easy_install` gibt es unter Python 3 nicht mehr, und `python-dev` sind
+die Header von Python 2 (Python 3 braucht `python3-dev`). Zudem landete
+alles im System-Python — unter Bookworm schlägt das ohnehin an PEP 668
+fehl. `install.sh` legt jetzt ein `virtualenv` an, und das Init-Skript
+startet `run.py` mit dem venv-Python statt mit dem System-Python. Vorher
+lief der Dienst mit einem Interpreter, in dem die Pakete nicht lagen.
+
+### Ergänzung aus Position 6/7
+
+`emit_message` akzeptiert jetzt auch einen einfachen Text. Fünf
+Aufrufstellen im Plugin-Management übergeben nur einen String, der
+Handler in `modules/notification` erwartet aber ein Dictionary mit
+`timeout` — mit einem String starb er mit `TypeError: string indices must
+be integers`, und die Benachrichtigung kam **nie** an. Das war schon in
+Python 2 so.
+
+## Testwerkzeuge
+
+| Skript | Prüft | Anzahl |
+|---|---|---|
+| `snapshot_routes.py` | erzeugt `routes_current.json` | 107 Routen |
+| `compare_routes.py` | Routenliste gegen die Baseline | 107/107 |
+| `test_api.py` | REST-Aufrufe | 32/32 |
+| `test_json.py` | Serialisierung | 16/16 |
+| `test_socket.py` | Socket.IO-Details | 21/21 |
+| `test_socket_e2e.py` | Live-Datenstrom mit echtem WebSocket | 9/9 |
+| `sweep_endpoints.py` | alle GET-Routen, nur lesend | 0 unerwartete |
+| `test_gpio.py` | GPIO-Schicht | 34/34 |
+| `test_system.py` | System-Endpunkte, Checkout-Schutz | 14/14 |
+| `test_plugins.py` | Plugin-Management, Traversal | 42/42 |
+| `test_migration.py` | SQL-Migrationen, Frischinstallation | 13/13 |
+
+Alle Skripte liefern bei Abweichung einen Exit-Code ungleich 0 und eignen
+sich damit als Gate. `test_migration.py` arbeitet in einem eigenen
+Verzeichnis und fasst die echte Datenbank nicht an.
 
 Position 7 ist als "teilweise" markiert, weil `requirements.txt` und das
 MQTT-Plugin jetzt stimmen, `install.sh` aber noch nicht geprüft ist.
