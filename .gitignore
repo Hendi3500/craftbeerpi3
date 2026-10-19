@@ -5,6 +5,10 @@ craftbeerpi.db
 *.pyc
 *.templog
 
+# virtualenv, in das install.sh die Pakete legt
+.venv/
+venv/
+
 modules/plugins/*
 !modules/plugins/__init__.py
 *.pyc

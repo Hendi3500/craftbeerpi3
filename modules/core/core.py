@@ -48,7 +48,11 @@ class ActorAPI(object):
         except Exception as e:
             self.notify("Actor Error", "Failed to setup actor %s. Please check the configuraiton" % value.name,
                         type="danger", timeout=None)
-            self.app.logger.error("Initializing of Actor %s failed" % id)
+            # Die Ausnahme mitprotokollieren: ohne sie laesst sich nicht
+            # unterscheiden, ob die Konfiguration falsch ist oder die
+            # Hardware fehlt (z. B. kein GPIO ohne rpi-lgpio).
+            self.app.logger.error("Initializing of Actor %s failed: %s: %s"
+                                   % (id, type(e).__name__, e))
 
     def switch_actor_on(self, id, power=None):
         actor = self.cache.get("actors").get(id)
@@ -394,6 +398,25 @@ class CraftBeerPi(ActorAPI, SensorAPI):
         return real_decorator
 
     def emit_message(self, message):
+        """
+        Nachricht an die Oberflaeche schicken.
+
+        Akzeptiert ein fertiges Dictionary (siehe notify()) oder einen
+        einfachen Text. Fuenf Aufrufstellen im Plugin-Management
+        uebergeben nur einen String, der Handler in
+        modules/notification erwartet aber ein Dictionary mit "timeout" -
+        mit einem String ist er mit "TypeError: string indices must be
+        integers" gestorben und die Benachrichtigung kam nie an. Das war
+        schon in Python 2 so.
+        """
+        if isinstance(message, str):
+            message = {
+                "id": str(uuid.uuid1()),
+                "type": "info",
+                "headline": "CraftBeerPi",
+                "message": message,
+                "timeout": None,
+            }
         self.emit_event(name="MESSAGE", message=message)
 
     def emit_event(self, name, **kwargs):

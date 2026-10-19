@@ -1,8 +1,9 @@
 import json
 
+import re
 import sys
 from flask import Blueprint, request, send_from_directory
-from importlib import import_module
+from importlib import import_module, reload as reload_module
 from modules import socketio, cbpi
 
 
@@ -16,6 +17,63 @@ blueprint = Blueprint('addon', __name__)
 
 
 modules = {}
+
+PLUGIN_DIR = "./modules/plugins"
+
+# Ein Plugin-Name darf nur aus Buchstaben, Ziffern, _, - und . bestehen und
+# muss mit einem Buchstaben oder einer Ziffer beginnen.
+#
+# Warum: die Routen "/api/editor/<name>" nehmen den Namen ungeprueft aus
+# dem Pfad. Ohne diese Pruefung laesst sich mit einem Name wie
+# "../../logs" jedes Verzeichnis loeschen (deletePlugin macht ein
+# shutil.rmtree) oder in beliebige Verzeichnisse schreiben. Der Server
+# bindet an 0.0.0.0, ist also im LAN erreichbar.
+NAME_MUSTER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
+
+# Obergrenze fuer den Namen. Das Dateisystem erlaubt 255 Bytes pro
+# Eintrag, ein zu langer Name wuerde erst beim Anlegen mit ENAMETOOLONG
+# scheitern.
+NAME_MAX_LAENGE = 100
+
+
+def _plugin_pfad(name):
+    """
+    Sicheren Pfad fuer ein Plugin liefern.
+
+    Gibt None zurueck, wenn der Name ungueltig ist oder aus dem
+    Plugin-Verzeichnis herausfuehren wuerde.
+    """
+    if not name or not isinstance(name, str) or not NAME_MUSTER.match(name):
+        return None
+    if len(name) > NAME_MAX_LAENGE:
+        return None
+    basis = os.path.abspath(PLUGIN_DIR)
+    pfad = os.path.abspath(os.path.join(basis, name))
+    try:
+        if os.path.commonpath([basis, pfad]) != basis:
+            return None
+    except ValueError:
+        # Verschiedene Laufwerke oder Wurzeln - auf Windows ein
+        # Sonderfall, auf Linux nicht moeglich.
+        return None
+    return pfad
+
+
+def _ist_plugin_verzeichnis(pfad):
+    """
+    True, wenn ein Eintrag in modules/plugins bzw. modules/base_plugins ein
+    echtes Plugin ist.
+
+    ``__pycache__`` ist selbst ein Verzeichnis und damit vom Datei-Filter
+    nicht erreichbar - es erschien deshalb in /api/editor/ als installiertes
+    Plugin und liess sich als Namespace-Paket sogar ohne Fehler importieren.
+    Klammer-Pfade und Punkt-Verzeichnisse sind aus demselben Grund keine
+    Plugins.
+    """
+    name = os.path.basename(pfad.rstrip("/"))
+    if name.startswith(".") or name.startswith("_"):
+        return False
+    return os.path.isdir(pfad)
 
 def merge(source, destination):
     """
@@ -41,8 +99,10 @@ def getPlugins():
     :return:
     """
     result = []
-    for filename in os.listdir("./modules/plugins"):
+    for filename in os.listdir(PLUGIN_DIR):
         if filename.endswith(".DS_Store") or filename.endswith(".py") or filename.endswith(".pyc"):
+            continue
+        if not _ist_plugin_verzeichnis(os.path.join(PLUGIN_DIR, filename)):
             continue
         result.append(filename)
 
@@ -55,7 +115,7 @@ def getFile(name):
     :param name: plugin name
     :return: the plugin code from __init__.py
     """
-    return send_from_directory('./plugins/'+name, "__init__.py")
+    return send_from_directory(_plugin_pfad(name) or PLUGIN_DIR, "__init__.py")
 
 @blueprint.route('/<name>', methods=['PUT'])
 def createPlugin(name):
@@ -65,9 +125,12 @@ def createPlugin(name):
     :param name: the plugin name
     :return: empty http response 204
     """
-    if not os.path.exists("./modules/plugins/"+name):
-        os.makedirs("./modules/plugins/"+name)
-        with open("./modules/plugins/" + name + "/__init__.py", "wb") as fo:
+    pfad = _plugin_pfad(name)
+    if pfad is None:
+        return ('Invalid plugin name', 400)
+    if not os.path.exists(pfad):
+        os.makedirs(pfad)
+        with open(os.path.join(pfad, "__init__.py"), "wb") as fo:
             fo.write(b"")
         cbpi.emit_message("PLUGIN %s CREATED" % (name))
         return ('', 204)
@@ -86,7 +149,12 @@ def saveFile(name):
     :param name: the plugin name
     :return: empty http reponse
     """
-    with open("./modules/plugins/"+name+"/__init__.py", "wb") as fo:
+    pfad = _plugin_pfad(name)
+    if pfad is None:
+        return ('Invalid plugin name', 400)
+    if not os.path.isdir(pfad):
+        return ('Dir Not found', 500)
+    with open(os.path.join(pfad, "__init__.py"), "wb") as fo:
         fo.write(request.get_data())
     cbpi.emit_message("PLUGIN %s SAVED" % (name))
 
@@ -100,30 +168,41 @@ def deletePlugin(name):
     :param name: plugin name
     :return: HTTP 204 if ok - HTTP 500 if plugin not exists
     """
-    if os.path.isdir("./modules/plugins/"+name) is False:
+    pfad = _plugin_pfad(name)
+    if pfad is None:
+        return ('Invalid plugin name', 400)
+    if os.path.isdir(pfad) is False:
         return ('Dir Not found', 500)
-    shutil.rmtree("./modules/plugins/"+name)
+    shutil.rmtree(pfad)
     cbpi.notify("Plugin deleted", "Plugin %s deleted successfully" % name)
     return ('', 204)
 
 @blueprint.route('/<name>/reload/', methods=['POST'])
-def reload(name):
+def reload_plugin(name):
     """
-    hot reload plugnin
-    :param name:
-    :return:
+    Hot-Reload eines Plugins.
+
+    Vorher standen hier drei Fehler nebeneinander, die den Endpunkt
+    komplett unbrauchbar machten:
+      - ``cache`` war nie definiert (NameError)
+      - ``reload`` ist in Python 3 kein Builtin mehr (NameError)
+      - ``e.message`` gibt es seit Python 3.0 nicht mehr (AttributeError)
+
+    Das Modul-Register ist das lokale ``modules``-Dictionary, in das
+    loadCorePlugins() und loadPlugins() schreiben.
     """
+    if _plugin_pfad(name) is None:
+        return ('Invalid plugin name', 400)
     try:
-        if name in cache["modules"]:
-            reload(cache["modules"][name])
-            cbpi.emit_message("REALOD OF PLUGIN %s SUCCESSFUL" % (name))
-            return ('', 204)
+        if name in modules:
+            reload_module(modules[name])
         else:
-            cache["modules"][name] = import_module("modules.plugins.%s" % (name))
-            return ('', 204)
+            modules[name] = import_module("modules.plugins.%s" % (name))
+        cbpi.emit_message("REALOD OF PLUGIN %s SUCCESSFUL" % (name))
+        return ('', 204)
     except Exception as e:
         cbpi.emit_message("REALOD OF PLUGIN %s FAILED" % (name))
-        return json.dumps(e.message)
+        return json.dumps("%s: %s" % (type(e).__name__, e)), 500
 
 
 @blueprint.route('/list', methods=['GET'])
@@ -143,13 +222,23 @@ def plugins():
 @blueprint.route('/<name>/download', methods=['POST'])
 def download_addon(name):
 
+    pfad = _plugin_pfad(name)
+    if pfad is None:
+        return ('Invalid plugin name', 400)
+
     plugin = cbpi.cache["plugins"].get(name)
-    plugin["loading"] = True
+    # Die None-Pruefung muss VOR dem Zugriff stehen. Vorher stand
+    # plugin["loading"] = True darueber, ein unbekannter Name lief also
+    # in einen TypeError und nicht in die 404.
     if plugin is None:
         return ('', 404)
+    plugin["loading"] = True
     try:
-        Repo.clone_from(plugin.get("repo_url"), "./modules/plugins/%s/" % (name))
+        Repo.clone_from(plugin.get("repo_url"), pfad)
         cbpi.notify("Download successful", "Plugin %s downloaded successfully" % name)
+    except Exception as e:
+        cbpi.notify("Download failed", str(e), type="danger", timeout=None)
+        return ('', 500)
     finally:
         plugin["loading"] = False
 
@@ -157,9 +246,18 @@ def download_addon(name):
 
 @blueprint.route('/<name>/update', methods=['POST'])
 def update_addon(name):
-    repo = Repo("./modules/plugins/%s/" % (name))
-    o = repo.remotes.origin
-    info = o.pull()
+    pfad = _plugin_pfad(name)
+    if pfad is None:
+        return ('Invalid plugin name', 400)
+    if not os.path.isdir(pfad):
+        return ('Dir Not found', 500)
+    try:
+        repo = Repo(pfad)
+        o = repo.remotes.origin
+        o.pull()
+    except Exception as e:
+        cbpi.notify("Update failed", str(e), type="danger", timeout=None)
+        return ('', 500)
     cbpi.notify("Plugin Updated", "Plugin %s updated successfully. Please restart the system" % name)
     return ('', 204)
 
@@ -167,8 +265,7 @@ def update_addon(name):
 def loadCorePlugins():
     for filename in os.listdir("./modules/base_plugins"):
 
-
-        if os.path.isdir("./modules/base_plugins/"+filename) is False:
+        if _ist_plugin_verzeichnis("./modules/base_plugins/" + filename) is False:
             continue
         try:
             modules[filename] = import_module("modules.base_plugins.%s" % (filename))
@@ -179,8 +276,8 @@ def loadCorePlugins():
             cbpi.app.logger.error(e)
 
 def loadPlugins():
-    for filename in os.listdir("./modules/plugins"):
-        if os.path.isdir("./modules/plugins/" + filename) is False:
+    for filename in os.listdir(PLUGIN_DIR):
+        if _ist_plugin_verzeichnis(os.path.join(PLUGIN_DIR, filename)) is False:
             continue
         try:
             modules[filename] = import_module("modules.plugins.%s" % (filename))

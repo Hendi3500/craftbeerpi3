@@ -37,6 +37,9 @@ class myThread (threading.Thread):
         self.value = 0
         self.sensor_name = sensor_name
         self.runnig = True
+        # Daemon-Thread: sonst laeuft der Prozess beim Beenden nicht
+        # sauber weg, weil der Thread noch in der Schleife haengt.
+        self.daemon = True
 
     def shutdown(self):
         pass
@@ -57,9 +60,18 @@ class myThread (threading.Thread):
                     if (content.split('\n')[0].split(' ')[11] == "YES"):
                         temp = float(content.split("=")[-1]) / 1000  # temp in Celcius
                         self.value = temp
-            except:
-                pass
+            except Exception as e:
+                # Kein blankes except: ein Sensor, der nicht gelesen werden
+                # kann, ist ein Fehlerfall und kein Grund, alles zu
+                # verschlucken. Der Log ist bei jedem Zyklus laut, deshalb
+                # wird der Fehler nur einmal gemeldet.
+                if not getattr(self, "_gemeldet", False):
+                    self._gemeldet = True
+                    app.logger.error("1-Wire: Sensor %s nicht lesbar: %s"
+                                     % (self.sensor_name, e))
 
+            # time.sleep() statt socketio.sleep(): dieser Thread ist ein
+            # reiner OS-Thread, kein Socket.IO-Backgroundtask.
             time.sleep(4)
 
 
@@ -94,7 +106,20 @@ class ONE_WIRE_SENSOR(SensorPassive):
 
     @cbpi.try_catch(0)
     def offset_value(self):
-        return float(self.offset)
+        # Fehlt "offset" in der Konfiguration, ist self.offset die
+        # Property-Instanz aus der Klassendefinition und keine Zahl.
+        # float() darauf wirft TypeError, und der try_catch lieferte
+        # stillschweigend 0 - der eingestellte Offset wurde also
+        # ignoriert und der Log lief alle fuenf Sekunden voll.
+        #
+        # Der Wert kann auch ein String sein (aus einem Formular), deshalb
+        # wird nicht auf den Typ geprueft, sondern der Parse-Versuch als
+        # Kriterium genommen.
+        wert = self.offset
+        try:
+            return float(wert)
+        except (TypeError, ValueError):
+            return 0.0
             
     @classmethod
     def init_global(self):

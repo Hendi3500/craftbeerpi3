@@ -224,7 +224,7 @@
     "rule": "/api/editor/<name>/download"
   },
   {
-    "endpoint": "addon.reload",
+    "endpoint": "addon.reload_plugin",
     "methods": [
       "POST"
     ],

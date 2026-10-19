@@ -5,13 +5,14 @@ from modules import cbpi
 from modules.core.hardware import ActorBase, SensorPassive, SensorActive
 from modules.core.props import Property
 
-try:
-    import RPi.GPIO as GPIO
+from modules.core.gpio import GPIO, GPIO_VERFUEGBAR
 
+if GPIO_VERFUEGBAR:
     GPIO.setmode(GPIO.BCM)
-except Exception as e:
-    print(e)
-    pass
+else:
+    cbpi.app.logger.warning(
+        "GPIO-Aktoren nicht verfuegbar: kein Zugriff auf die GPIO-Schnittstelle. "
+        "Auf dem Raspberry Pi 'pip install rpi-lgpio' ausfuehren.")
 
 
 
@@ -50,10 +51,20 @@ class GPIOPWM(ActorBase):
         if power is not None:
             self.power = int(power)
 
-        if self.frequency is None:
-            self.frequency = 0.5  # 2 sec
+        # Fehlt "frequency" in der Konfiguration, ist self.frequency die
+        # Property-Instanz aus der Klassendefinition und keine Zahl. Ein
+        # float() darauf wirft TypeError. Der Wert kann auch ein String
+        # sein (aus einem Formular), deshalb wird der Parse-Versuch als
+        # Kriterium genommen statt der Typ.
+        try:
+            freq = float(self.frequency)
+        except (TypeError, ValueError):
+            freq = 0.0
 
-        self.p = GPIO.PWM(int(self.gpio), float(self.frequency))
+        if freq <= 0:
+            freq = 0.5  # 2 sec
+
+        self.p = GPIO.PWM(int(self.gpio), float(freq))
         self.p.start(int(self.power))
 
     def set_power(self, power):

@@ -35,11 +35,29 @@ show_menu () {
              apt-get -y update; apt-get -y upgrade;
            fi
 
-           apt-get -y install python-setuptools
-           easy_install pip
-           apt-get -y install python-dev
+           # Python 3 und venv. Vorher stand hier:
+           #   apt-get install python-setuptools; easy_install pip;
+           #   apt-get install python-dev; pip install -r requirements.txt
+           # Das ist durchgehend Python 2: easy_install gibt es unter
+           # Python 3 nicht mehr, und "python-dev" sind die Header von
+           # Python 2 (Python 3 braucht python3-dev). Zudem landete alles
+           # im System-Python statt in einer eigenen Umgebung - unter
+           # Bookworm schlaegt das ohnehin an PEP 668 fehl.
+           apt-get -y install python3 python3-venv python3-dev
            apt-get -y install libpcre3-dev
-           pip install -r requirements.txt
+
+           if [ ! -d .venv ]; then
+             python3 -m venv .venv
+           fi
+           ./.venv/bin/pip install --upgrade pip wheel
+           ./.venv/bin/pip install -r requirements.txt
+
+           # rpi-lgpio laesst sich nur auf dem Pi installieren (es braucht
+           # die lgpio-C-Bibliothek). Auf anderen Systemen schlaegt die
+           # Installation fehl - das ist kein Grund, den Install abzubrechen.
+           if grep -qi "raspberry pi" /proc/device-tree/model 2>/dev/null; then
+             ./.venv/bin/pip install rpi-lgpio || echo "rpi-lgpio konnte nicht installiert werden - GPIO-Aktoren dann nicht nutzbar"
+           fi
 
            confirmAnswer "Would you like to add active 1-wire support at your Raspberry PI now? IMPORTANT: The 1-wire thermometer must be conneted to GPIO 4!"
            if [ $? = 0 ]; then
@@ -110,7 +128,7 @@ show_menu () {
            fi
            ;;
         8)
-           confirmAnswer "Are you sure you want to reset all file changes for this git respository (git reset --hard)?"
+           confirmAnswer "WARNING: This discards ALL uncommitted changes with 'git reset --hard'. Anything not committed is lost forever. Are you sure?"
            if [ $? = 0 ]; then
               whiptail --textbox /dev/stdin 20 50 <<<"$(git reset --hard)"
               show_menu

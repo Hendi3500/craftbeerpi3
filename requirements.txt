@@ -24,3 +24,14 @@ simple-websocket>=1.1
 # MQTT (modules/base_plugins/mqtt). Das Plugin gehoert zum Kern, laedt also
 # bei jedem Start und scheitert sonst mit einer Fehlermeldung im Log.
 paho-mqtt>=2.1
+
+# GPIO-Zugriff. RPi.GPIO wird auf Raspberry Pi OS Bookworm nicht mehr
+# gebaut (das Paket nutzt imp-APIs, die es ab Python 3.12 nicht mehr
+# gibt). rpi-lgpio bringt ein drop-in kompatibles RPi.GPIO mit.
+#
+# Das Paket laesst sich nur auf dem Pi installieren (es braucht die
+# lgpio-C-Bibliothek). Auf anderen Systemen schlaegt die Installation
+# fehl - das ist unkritisch, modules/core/gpio.py liefert dann einen Stub.
+#
+# Installation auf dem Pi:  pip install rpi-lgpio
+#rpi-lgpio>=0.6
