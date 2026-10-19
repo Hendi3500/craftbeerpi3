@@ -21,6 +21,12 @@ modules/plugins/*
 !modules/plugins/AdvancedPIDAutoTune/
 !modules/plugins/AdvancedPIDAutoTune/**
 
+# Dasselbe fuer CascadeControl: die kaskadierten PID- und Hysterese-
+# Regler bleiben nach der Entscheidung ein Plugin, sollen aber im Repo
+# liegen.
+!modules/plugins/CascadeControl/
+!modules/plugins/CascadeControl/**
+
 *.pyc
 *.js
 *.css
