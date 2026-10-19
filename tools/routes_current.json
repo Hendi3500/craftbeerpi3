@@ -518,6 +518,20 @@
     "rule": "/api/recipe/import/v1/"
   },
   {
+    "endpoint": "backend_restart.status",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/restart"
+  },
+  {
+    "endpoint": "backend_restart.restart",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/restart"
+  },
+  {
     "endpoint": "SensorView:getAll",
     "methods": [
       "GET"

@@ -170,6 +170,16 @@ class BoilStep(StepBase):
     hop_4_added = Property.Number("", default_value=None, description="Fourth Hop alert")
     hop_5 = Property.Number("Hop 5 Addition", configurable=True)
     hop_5_added = Property.Number("", default_value=None, description="Fives Hop alert")
+    hop_5_name = Property.Text("Hop 5 Name", configurable=True, default_value="")
+
+    # Hop-Namen: der Alert sagt damit "Please add Magnum" statt
+    # "Please add Hop 1". Der Name kommt aus dem Rezept-Import oder wird
+    # im Step-Dialog eingetragen. Er ist Config, kein State - er uebersteht
+    # deshalb einen Reset und einen Neustart.
+    hop_1_name = Property.Text("Hop 1 Name", configurable=True, default_value="", description="Name of the first hop, e.g. Magnum")
+    hop_2_name = Property.Text("Hop 2 Name", configurable=True, default_value="", description="Name of the second hop")
+    hop_3_name = Property.Text("Hop 3 Name", configurable=True, default_value="")
+    hop_4_name = Property.Text("Hop 4 Name", configurable=True, default_value="")
 
     def init(self):
         '''
@@ -195,17 +205,61 @@ class BoilStep(StepBase):
     def reset(self):
         self.stop_timer()
         self.set_target_temp(self.temp, self.kettle)
+        # Die Hop-Flags zuruecksetzen. Sie sind managed fields und werden
+        # im stepstate gespeichert; reset() hat sie vorher nicht
+        # zurueckgesetzt. Folge: nach "Reset Step" bleibt die Step-Instanz
+        # mit allen hop_X_added = True am Leben, check_hop_timer() haelt
+        # jeden Hop fuer "schon zugegeben" und es feuert kein Hop-Alarm
+        # mehr fuer den Rest des Suds.
+        #
+        # resetCurrentStep() laesst die Instanz am Leben, deshalb muessen
+        # die Flags auf der Instanz zurueckgesetzt werden - das dirty flag
+        # sorgt dafuer, dass der Kern sie wieder ins stepstate schreibt.
+        # Die Hop-Namen sind Config, kein State, die bleiben wie sie sind.
+        for number in range(1, 6):
+            self.__setattr__("hop_%s_added" % number, None)
 
     def finish(self):
         self.set_target_temp(0, self.kettle)
 
+
+    def hop_label(self, number):
+        """
+        Wie der Hop im Alert heisst: sein Name, wenn einer konfiguriert ist,
+        sonst die Slot-Nummer. Der Name kommt aus dem Rezept-Import oder
+        wird im Step-Dialog eingetragen - er kann fehlen, leer oder
+        Leerzeichen sein, und eine Zahl im Feld ist ueberhaupt kein Name,
+        sondern ein verirrter Config-Wert.
+        :return:
+        """
+        name = self.__getattribute__("hop_%s_name" % number)
+
+        if not isinstance(name, str):
+            return "Hop %s" % number
+
+        name = name.strip()
+
+        if not name:
+            return "Hop %s" % number
+
+        # Eine reine Zahl ist kein Name, sondern ein verirrter Config-Wert.
+        # Die Recipe-Import-Version hat eine Zahl im Feld mit dem echten
+        # Namen des Hops belegt - der steht dann in der Zahl und geht
+        # verloren, wenn der Name nicht uebernommen wird. Deshalb faellt
+        # auch "42" auf die Slot-Nummer zurueck.
+        try:
+            float(name)
+        except ValueError:
+            return name
+
+        return "Hop %s" % number
 
     def check_hop_timer(self, number, value):
 
         if self.__getattribute__("hop_%s_added" % number) is not True and time.time() > (
             self.timer_end - (int(self.timer) * 60 - int(value) * 60)):
             self.__setattr__("hop_%s_added" % number, True)
-            self.notify("Hop Alert", "Please add Hop %s" % number, timeout=None)
+            self.notify("Hop Alert", "Please add %s" % self.hop_label(number), timeout=None)
 
     def execute(self):
         '''

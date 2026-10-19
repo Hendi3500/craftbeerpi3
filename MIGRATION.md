@@ -239,6 +239,80 @@ Handler in `modules/notification` erwartet aber ein Dictionary mit
 be integers`, und die Benachrichtigung kam **nie** an. Das war schon in
 Python 2 so.
 
+## Uebernahme der Plugin-Updates
+
+Acht Plugin-Updates lagen unter `cbpi3UIng/plugin_update/`. Sie waren zum
+Zeitpunkt des Uebernahmens gegen den Python-2-Kern geschrieben. Sie wurden
+ einzeln analysiert und nach ihrer Wirkung eingeordnet:
+
+| Plugin | Entscheidung | Umsetzung |
+|---|---|---|
+| `BoilStepResetFix` | Kern | `base_plugins/brew_steps`: reset() reariert die Hop-Flags, `hop_1_name`..`hop_5_name` ergaenzt, Alert nennt den Namen |
+| `FermenterAutoModeStateFix` | Kern | `modules/fermenter/__init__.py`: toggle() korrigiert, State-Flag nur noch von dem cleared, der auch gestoppt hat |
+| `NotificationTimestamp` | Kern | `core/core.py`: Zeitstempel in emit_message; `notification/__init__.py`: NOTIFY_DISMISS beim Löschen |
+| `BoilingPointAltitude` | Kern | `config/schema.sql`: Config-Parameter `altitude` (Typ number) |
+| `BackendRestart` | Kern | neues Modul `modules/restart/`: `GET`/`POST /api/restart`, Config-Parameter `plugins_changed` und `backend_started_at` |
+| `RecipeUuidFromBeerXml` | Kern | `config/schema.sql`: Config-Parameter `brew_recipe_uuid`. Der BeerXML-Patch ist entfallen - die UI setzt den Wert selbst |
+| `AdvancedPIDAutoTune` | Plugin | unveraendert in `modules/plugins/` |
+| `HopNamesFromRecipe` | entfaellt | ueberholt, die UI schreibt `hop_N_name` selbst |
+
+### Warum nicht als Plugins behalten
+
+Die drei Kern-Bugs, die die Plugins umgingen, sind im Kern selbst
+repariert. Als Plugin haetten sie zwei Nachteile:
+
+- **Eine Kopie des Core-BoilStep** driftet bei jedem Core-Update. Im Kern
+  ist der Fix Teil der Implementierung und kann nicht auseinanderlaufen.
+- **Runtime-Patches auf View-Methoden** sind im portierten Core nicht mehr
+  noetig: `flask_classy` band die Methode beim Registrieren der View
+  ("ein spaeterer Wechsel des Klassenattributs bliebe wirkungslos"). Der
+  Ersatz in `modules/core/classy.py` loest die Methode erst beim Aufruf
+  auf - der Patch-Mechanismus der Plugins ist also ueberfluessig.
+
+### Zwei Abweichungen von der Plugin-Fassung
+
+1. **`hop_label` faellt auch bei einer Zahl im Namensfeld zurueck.** Die
+   Plugin-Fassung lehnte nur Nicht-Strings ab; der String "42" kam als
+   Name durch. Die Doku des Plugins beschrieb aber genau das Gegenteil
+   ("eine Zahl im Feld ist ueberhaupt kein Name, sondern ein verirrter
+   Config-Wert"). Der Kern folgt der Doku.
+2. **Die Config-Parameter liegen in `config/schema.sql`**, nicht in einem
+   eigenen Plugin. Sie sind reine Konfiguration wie `brewery_name` und
+   `unit`, und `INSERT OR IGNORE` wirkt auch auf bestehende Installationen.
+
+### Dabei gefundener Kern-Bug: `set_config_parameter`
+
+`CraftBeerPi.set_config_parameter()` hat `Config.update()` nur `name` und
+`value` uebergeben. `update()` schreibt aber **alle** Spalten der
+config-Tabelle, und was nicht uebergeben wird, kommt als NULL herein:
+
+```python
+update_data = {"name": name, "value": value}
+c = Config.update(**update_data)          # type, description, options -> NULL
+```
+
+Im Cache blieb das verborgen - dort wurde nur `name`/`value` aktualisiert.
+In der Datenbank nicht. Nach dem naechsten Start war der Parameter ohne
+Typ wieder da, und die UI rendert ihn als Textfeld statt als Auswahl-
+oder Zahlenfeld.
+
+Betroffen war unter anderem `brew_name`, das beim **Rezeptimport** auf
+diesen Weg gesetzt wird - der Typ ging also bei jedem Rezeptimport
+verloren. Die Korrektur uebergibt das vollstaendige Dict des Parameters.
+`update/4_config_parameter_types.sql` repariert die bereits beschaedigten
+Zeilen.
+
+### Zwei weitere Befunde beim Uebernahmen
+
+- **`BackendRestart` als Kernel-Modul** statt Blueprint im Plugin: es
+  ergaenzt die System-Endpunkte, die mit `reboot` und `shutdown` schon im
+  Kern liegen. Die Route bleibt `/api/restart`, weil die UI sie so
+  aufruft.
+- **`hops_changed`/`backend_started_at`**: der Neustart-Thread raeumt die
+  Aenderungsliste **vor** dem `execv` - die Liste bedeutet "geaendert seit
+  dem Start des laufenden Backends", und nach dem Neustart ist das neue
+  Backend das, wogegen alles andere verglichen wird.
+
 ## Testwerkzeuge
 
 | Skript | Prüft | Anzahl |
@@ -254,6 +328,7 @@ Python 2 so.
 | `test_system.py` | System-Endpunkte, Checkout-Schutz | 14/14 |
 | `test_plugins.py` | Plugin-Management, Traversal | 42/42 |
 | `test_migration.py` | SQL-Migrationen, Frischinstallation | 13/13 |
+| `test_kern_uebernahmen.py` | die aus den Plugin-Updates uebernommenen Funktionen | 43/43 |
 
 Alle Skripte liefern bei Abweichung einen Exit-Code ungleich 0 und eignen
 sich damit als Gate. `test_migration.py` arbeitet in einem eigenen

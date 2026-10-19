@@ -89,6 +89,24 @@ INSERT OR IGNORE INTO config VALUES ('buzzer_beep_level', 'HIGH', 'select', 'Buz
 INSERT OR IGNORE INTO config VALUES ('setup', 'YES', 'select', 'Show the Setup dialog', '["YES","NO"]');
 INSERT OR IGNORE INTO config VALUES ('brew_name', '', 'text', 'Brew Name', NULL);
 INSERT OR IGNORE INTO config VALUES ('donation_notification', 'YES', 'select', 'Disable Donation Notification', '["YES","NO"]');
+-- Meereshöhe der Brauanlage in Metern. Der Siedepunkt sinkt um rund
+-- 1 °C je 285 m:  T_Siede = 100 - Höhe/285.  Auf 400 m sind das 98,6 °C -
+-- ein Schritt mit 100 °C erreicht sein Ziel dann nie, der Step läuft in
+-- den Timeout und der Brauvorgang steht.  Die Korrektur selbst macht die
+-- UI (Rezeptimport, Rezept-Library, Step-Dialog).  Typ "number", damit
+-- /parameter ein Zahlenfeld statt eines Textfelds rendert.
+INSERT OR IGNORE INTO config VALUES ('altitude', 0, 'number', 'Altitude above sea level in meters (boiling point = 100 - altitude/285)', NULL);
+-- ID des geladenen Rezepts. Die UI leitet sie aus dem Dokument ab und
+-- schreibt sie hierher; das Backend haelt sie nur fuer die Anzeige
+-- neben dem Braunamen bereit.
+INSERT OR IGNORE INTO config VALUES ('brew_recipe_uuid', '', 'text', 'UUID of the loaded brew recipe', NULL);
+-- Plugin-Aenderungen, die noch einen Neustart wollen: JSON-Liste
+-- [{"name": ..., "at": ..., "action": ...}]. Der Neustart selbst leert die
+-- Liste, bevor er das Prozess-Image ersetzt.
+INSERT OR IGNORE INTO config VALUES ('plugins_changed', '[]', 'text', 'Plugins changed since the last backend restart, JSON. Internal, do not edit.', NULL);
+-- Epoch-Sekunden (float) des Starts des laufenden Backends. Damit weiss
+-- die UI, ob eine Aenderung von vor einem Neustart schon angewendet ist.
+INSERT OR IGNORE INTO config VALUES ('backend_started_at', '0', 'text', 'When the running backend was started (epoch seconds, float). Internal, do not edit.', NULL);
 
 
 CREATE TABLE IF NOT EXISTS actor

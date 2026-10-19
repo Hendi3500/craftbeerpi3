@@ -128,6 +128,7 @@ Standard-`MethodView` ist das Wegfallen der Trailing-Slashes.
 .venv/bin/python tools/test_system.py         # 14 System-Endpunkte
 .venv/bin/python tools/test_plugins.py        # 42 Plugin-Management
 .venv/bin/python tools/test_migration.py      # 13 SQL-Migrationen
+.venv/bin/python tools/test_kern_uebernahmen.py # 43 uebernommene Kern-Funktionen
 ```
 
 Alle Skripte liefern bei Abweichung einen Exit-Code ungleich 0 und eignen

@@ -247,11 +247,30 @@ class CraftBeerPi(ActorAPI, SensorAPI):
             return cfg.value
 
     def set_config_parameter(self, name, value):
+        """
+        Wert eines Config-Parameters setzen.
+
+        Wichtig: Config.update() bekommt das **vollstaendige** Dict des
+        Parameters, nicht nur name und value. update() schreibt alle
+        Spalten der Tabelle, und was nicht uebergeben wird, kommt als NULL
+        herein. Mit name und value allein verlor der Parameter seinen Typ
+        und seine Beschreibung - im Cache blieb das verborgen, in der
+        Datenbank nicht. Nach dem naechsten Start war der Parameter ohne
+        Typ wieder da, und die UI rendert ihn als Textfeld statt als
+        Auswahl- oder Zahlenfeld.
+
+        Das ist keine theoretische Ueberlegung: /api/config/<name> macht
+        es richtig, cbpi.set_config_parameter() hatte es falsch.
+        """
         from modules.config import Config
         with self.app.app_context():
-            update_data = {"name": name, "value": value}
-            self.cache.get("config")[name].__dict__.update(**update_data)
-            c = Config.update(**update_data)
+            eintrag = self.cache.get("config").get(name)
+
+            if eintrag is None:
+                raise KeyError("Unbekannter Config-Parameter: %s" % name)
+
+            eintrag.__dict__.update({"name": name, "value": value})
+            c = Config.update(**eintrag.__dict__)
             self.emit("UPDATE_CONFIG", c)
 
 
@@ -408,6 +427,26 @@ class CraftBeerPi(ActorAPI, SensorAPI):
         mit einem String ist er mit "TypeError: string indices must be
         integers" gestorben und die Benachrichtigung kam nie an. Das war
         schon in Python 2 so.
+
+        Jede Message bekommt ausserdem den Zeitpunkt, zu dem sie ausgeloest
+        wurde (Epoch-Millisekunden, UTC). Eine Message sagt sonst nur *was*
+        passiert ist, nie *wann*. Bei den transienten Notifications
+        (timeout=5000) faellt das nicht auf - sie stehen 5 Sekunden als
+        Toast. Bei den persistenten (timeout=None) schon: die liegen in
+        cbpi.cache["messages"], bis sie weggeklickt werden, und nach ein paar
+        Stunden Brauvorgang laesst sich eine Warnung von eben nicht mehr von
+        der unterscheiden, die den Kessel kalt haelt.
+
+        Der Stempel sitzt hier, weil das die einzige Stelle ist, durch die
+        alle Messages laufen: von hier geht dasselbe Dict an den
+        MESSAGE-Event, und das Notification-Modul haengt genau dieses Dict in
+        den Cache **und** schiebt es an die Clients. Damit landet der
+        Zeitpunkt gleichzeitig im Socket, in GET /api/notification/ und in
+        /api/system/dump - ohne eine zweite Kopie des Dicts.
+
+        Format: Epoch-Millisekunden statt eines formatierten Strings. Die
+        UI ist die einzige Stelle, die daraus die lokale Brauzeit macht,
+        ohne die Zeitzone des Backends raten zu muessen.
         """
         if isinstance(message, str):
             message = {
@@ -417,6 +456,8 @@ class CraftBeerPi(ActorAPI, SensorAPI):
                 "message": message,
                 "timeout": None,
             }
+        if isinstance(message, dict) and message.get("timestamp") is None:
+            message["timestamp"] = int(round(time.time() * 1000))
         self.emit_event(name="MESSAGE", message=message)
 
     def emit_event(self, name, **kwargs):

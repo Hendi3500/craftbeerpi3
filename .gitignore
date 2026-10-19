@@ -9,8 +9,18 @@ craftbeerpi.db
 .venv/
 venv/
 
+# Nachinstallierbare Plugins liegen in modules/plugins/ und werden ueber den
+# Editor verwaltet - sie gehoeren nicht ins Repository.
 modules/plugins/*
 !modules/plugins/__init__.py
+
+# Ausnahme: AdvancedPIDAutoTune ist bewusst als Plugin entschieden (es ist
+# ein einmaliges Einstellwerkzeug und braucht das CascadeControl-Plugin),
+# soll aber einen Neucheckout ueberleben. Damit das nicht versehentlich
+# wieder unter die generelle Ausnahme faellt, wird es explizit genannt.
+!modules/plugins/AdvancedPIDAutoTune/
+!modules/plugins/AdvancedPIDAutoTune/**
+
 *.pyc
 *.js
 *.css

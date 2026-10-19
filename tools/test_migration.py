@@ -85,11 +85,16 @@ def run():
         check("keine Migrationsfehler auf stdout", "EXCEPT" not in ausgabe,
               ausgabe[-200:])
 
+        # Die erwarteten Versionen aus dem update/-Verzeichnis ableiten.
+        # Fest verdrahtete Zahlen brechen bei jeder neuen Migration.
+        erwartet = sorted(int(f.split("_")[0]) for f in os.listdir(
+            os.path.join(tmp, "update")) if f.endswith(".sql"))
+
         db = _db(tmp)
         versionen = [r[0] for r in db.execute(
             "SELECT version FROM schema_info ORDER BY id")]
-        check("schema_info hat die erwartete Version", versionen == [1, 2, 3],
-              str(versionen))
+        check("schema_info hat die erwartete Version", versionen == erwartet,
+              "%s, erwartet %s" % (versionen, erwartet))
 
         # Die Zeilen aus den Migrationen muessen da sein
         port = db.execute("SELECT value FROM config WHERE name='port'").fetchone()
@@ -117,31 +122,40 @@ def run():
               ausgabe[-200:])
         db = _db(tmp)
         anzahl = db.execute("SELECT COUNT(*) FROM schema_info").fetchone()[0]
-        check("keine Migration doppelt ausgefuehrt", anzahl == 3,
-              "%d Eintraege" % anzahl)
+        check("keine Migration doppelt ausgefuehrt", anzahl == len(erwartet),
+              "%d Eintraege, erwartet %d" % (anzahl, len(erwartet)))
         db.close()
 
         print("\n--- Neue Migration (Upgrade) ------------------------------")
-        with open(os.path.join(tmp, "update", "4_test_upgrade.sql"), "w") as f:
+        # Die naechste freie Version nehmen. Eine Datei mit einer bereits
+        # vergebenen Version wird uebersprungen - die Versionsnummer ist
+        # der Schluessel, nicht nur ein Ordnungsmerkmal.
+        neue_version = max(erwartet) + 1
+        with open(os.path.join(tmp, "update",
+                               "%d_test_upgrade.sql" % neue_version), "w") as f:
             f.write("INSERT OR IGNORE INTO config VALUES "
-                    "('test_migration_4', 'ja', 'text', 'Test', NULL );\n")
+                    "('test_migration_%d', 'ja', 'text', 'Test', NULL );\n" % neue_version)
         proc = _starte(tmp)
         db = _db(tmp)
-        neu = db.execute("SELECT value FROM config WHERE name='test_migration_4'").fetchone()
+        neu = db.execute("SELECT value FROM config WHERE name='test_migration_%d'"
+                         % neue_version).fetchone()
         check("neue Migration wurde ausgefuehrt", neu is not None, repr(neu))
         anzahl = db.execute("SELECT COUNT(*) FROM schema_info").fetchone()[0]
-        check("nur die neue Migration kam dazu", anzahl == 4,
-              "%d Eintraege" % anzahl)
+        check("nur die neue Migration kam dazu", anzahl == len(erwartet) + 1,
+              "%d Eintraege, erwartet %d" % (anzahl, len(erwartet) + 1))
         db.close()
 
         print("\n--- Fehler landen im Log -----------------------------------")
-        # Eine kaputte Migration schreiben
-        with open(os.path.join(tmp, "update", "5_kaputt.sql"), "w") as f:
+        # Eine kaputte Migration schreiben - wieder mit einer freien Version,
+        # sonst wird sie uebersprungen, statt zu scheitern.
+        kaputt_version = max(erwartet) + 2
+        kaputt_name = "%d_kaputt.sql" % kaputt_version
+        with open(os.path.join(tmp, "update", kaputt_name), "w") as f:
             f.write("THIS IS NOT VALID SQL;\n")
         proc = _starte(tmp)
         log = open(os.path.join(tmp, "logs", "app.log")).read()
-        check("Migrationsfehler steht im Log", "Migration 5_kaputt.sql" in log,
-              log[-200:])
+        check("Migrationsfehler steht im Log", ("Migration %s" % kaputt_name) in log,
+              log[-300:])
         check("Migrationsfehler steht nicht auf stdout",
               "EXCEPT" not in proc.stdout.decode(errors="replace"))
 

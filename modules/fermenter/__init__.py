@@ -208,40 +208,120 @@ class FermenterView(BaseView):
 
     @route('/<int:id>/automatic', methods=['POST'])
     def toggle(self, id):
-        fermenter = cbpi.cache.get(self.cache_key)[id]
+        """
+        Automatik- und Handbetrieb umschalten.
+
+        Das State-Flag wird hier nur noch von dem cleared, der auch
+        gestoppt hat. Vorher wurde es an drei Stellen umgeschaltet:
+        einmal hier nach dem Start, einmal hier nach dem Stop und nochmal
+        im Background-Task, wenn der Controller endet. Genau das
+        Zurueckkehren loest aber das Stoppen aus - von Automatik auf
+        Handbetrieb gewechselt wurde damit:
+
+            1. toggle() -> instance.stop(), state = False (Handbetrieb)
+            2. run() kehrt zurueck -> state = True (wieder Automatik)
+            3. erst der naechste Druck blieb auf Handbetrieb - ein zweiter
+               Stop auf einen bereits toten Controller.
+
+        Der Button stand also gruen, waehrend gar kein Controller mehr lief.
+        """
+        fermenter = cbpi.cache.get(self.cache_key).get(id)
+        if fermenter is None:
+            return ('', 404)
+
         try:
-            print(fermenter.state)
-            if fermenter.state is False:
-                # Start controller
-                if fermenter.logic is not None:
-                    cfg = fermenter.config.copy()
-                    cfg.update(
-                        dict(api=cbpi, fermenter_id=fermenter.id, heater=fermenter.heater, sensor=fermenter.sensor))
-                    instance = cbpi.get_fermentation_controller(fermenter.logic).get("class")(**cfg)
-                    instance.init()
-                    fermenter.instance = instance
-
-                    def run(instance):
-                        instance.run()
-                        fermenter.state = not fermenter.state
-                        cbpi.emit("UPDATE_FERMENTER", cbpi.cache.get(self.cache_key).get(id))
-
-                    t = cbpi.socketio.start_background_task(target=run, instance=instance)
-                fermenter.state = not fermenter.state
-                cbpi.emit("UPDATE_FERMENTER", cbpi.cache.get(self.cache_key).get(id))
+            if getattr(fermenter, "state", False):
+                self._stop_fermenter(fermenter)
             else:
-                # Stop controller
-                fermenter.instance.stop()
-                fermenter.state = not fermenter.state
-                cbpi.emit("UPDATE_FERMENTER", cbpi.cache.get(self.cache_key).get(id))
-
+                self._start_fermenter(fermenter)
         except Exception as e:
-            print(e)
+            cbpi.app.logger.error("Umschalten des Fermenters %s fehlgeschlagen: %s: %s"
+                                   % (id, type(e).__name__, e))
             cbpi.notify("Toogle Fementer Controller failed", "Pleae check the %s configuration" % fermenter.name,
                         type="danger", timeout=None)
+            # Nie ein Flag stehen lassen fuer einen Controller, der nicht
+            # laeuft.
+            fermenter.state = False
             return ('', 500)
 
         return ('', 204)
+
+    def _start_fermenter(self, fermenter):
+        """
+        Controller aufbauen, auf Automatik stellen und starten.
+
+        Ohne konfigurierten Controller bleibt der Fermenter auf Handbetrieb:
+        der Kern hat das Flag auch ohne "logic" gesetzt - der Button waere
+        gruen, ohne dass etwas laeuft.
+        """
+        logic = getattr(fermenter, "logic", None)
+
+        if logic is None:
+            cbpi.app.logger.info(
+                "Fermenter %s hat keinen Controller - bleibt im Handbetrieb"
+                % getattr(fermenter, "name", "?"))
+            return
+
+        controller = cbpi.get_fermentation_controller(logic)
+
+        if controller is None:
+            cbpi.notify("Fermenter Controller not found",
+                        "Please check the logic configuration of %s" % fermenter.name,
+                        type="danger", timeout=None)
+            return
+
+        cfg = fermenter.config.copy()
+        cfg.update(
+            dict(api=cbpi, fermenter_id=fermenter.id, heater=fermenter.heater, sensor=fermenter.sensor))
+        instance = controller.get("class")(**cfg)
+        instance.init()
+        fermenter.instance = instance
+
+        # Vor dem Start des Tasks, nicht danach: ein Controller, der
+        # sofort endet oder eine Exception wirft, wuerde sonst das gerade
+        # gesetzte Flag wieder loeschen.
+        fermenter.state = True
+        cbpi.emit("UPDATE_FERMENTER", fermenter)
+
+        def run(instance):
+            try:
+                instance.run()
+            except Exception as e:
+                cbpi.app.logger.error("Controller des Fermenters %s ist gescheitert: %s: %s"
+                                       % (getattr(fermenter, "id", "?"), type(e).__name__, e))
+            finally:
+                self._clear_running(fermenter)
+
+        t = cbpi.socketio.start_background_task(target=run, instance=instance)
+
+    def _stop_fermenter(self, fermenter):
+        """
+        Controller stoppen und im Handbetrieb lassen.
+
+        Das Flag wird hier und nirgends sonst geloescht, damit das
+        Zurueckkehren des Controllers es nicht wieder auf Automatik stellt.
+        """
+        instance = getattr(fermenter, "instance", None)
+
+        if instance is not None:
+            instance.stop()
+
+        fermenter.instance = None
+        fermenter.state = False
+        cbpi.emit("UPDATE_FERMENTER", fermenter)
+
+    def _clear_running(self, fermenter):
+        """
+        Zurueck auf Handbetrieb, wenn der Controller von sich aus endet.
+
+        Nur wenn das Flag noch gesetzt ist: beim manuellen Stop hat
+        _stop_fermenter() es bereits geloescht, der Schritt entfaellt dann.
+        """
+        if not getattr(fermenter, "state", False):
+            return
+
+        fermenter.state = False
+        cbpi.emit("UPDATE_FERMENTER", fermenter)
 
     def get_fermenter(self, id):
         return cbpi.cache["fermenter"].get(id)

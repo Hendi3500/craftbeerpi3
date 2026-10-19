@@ -37,6 +37,7 @@ import modules.stats
 import modules.kettle
 import modules.recipe_import
 import modules.core.db_mirgrate
+import modules.restart
 
 from modules.app_config import cbpi
 # Build the database:

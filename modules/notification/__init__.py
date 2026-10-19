@@ -18,10 +18,27 @@ class NotificationView(FlaskView):
         Delete message from cache by id
         :param id: message id to be deleted
         :return: empty response HTTP 204
+
+        Danach wird NOTIFY_DISMISS emittiert. Der Cache
+        cbpi.cache["messages"] ist prozessweit - die Message ist nach dem
+        DELETE wirklich fuer alle weg. Der Kern emittierte dabei aber
+        nichts, die anderen Clients erfuhren es erst, wenn sie zufaellig
+        neu luden (/api/system/dump beim reconnect). Bis dahin stand die
+        Notification bei ihnen noch in der Liste, und der persistente Toast
+        blieb komplett stehen, waehrend der Brauer, der sie weggeklickt hat,
+        eine Liste ansah, in der sie nicht mehr ist. Handy in der einen
+        Hand, Tablet an der Wand: das ist der Normalfall.
         """
         for idx, m in enumerate(cbpi.cache.get("messages", [])):
             if (m.get("id") == id):
                 cbpi.cache["messages"].pop(idx)
+        # Auch dann emittieren, wenn nichts gefunden wurde. Der Kern
+        # antwortet in beiden Faellen 204, und ein Client, der gerade eine
+        # bereits von einem anderen geloeschte Message wegklickt, muss
+        # trotzdem bescheid wissen: die Notification, die er aus seiner
+        # Liste fallen laesst, ist genau die, die er eben angeklickt hat.
+        # Erst dadurch stimmen die beiden Listen ueberein.
+        cbpi.emit("NOTIFY_DISMISS", id)
         return ('', 204)
 
 @cbpi.event("MESSAGE", async_=True)
