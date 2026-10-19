@@ -1,20 +1,83 @@
 # Portierung CraftBeerPi 3.0 auf Python 3 / Flask 3
 
-Workflow und Notizen zur laufenden Portierung. Zustaendig: Position 1 abgeschlossen.
+Workflow und Notizen zur laufenden Portierung. Zustaendig: Position 1-4 abgeschlossen, Port nach Verlust am 19.10.2026 wiederhergestellt (siehe unten).
+
+## Verlust und Wiederherstellung (2026-10-19)
+
+Der Port war ueber mehrere Arbeitsstunden **uncommittet** und ist am
+19.10.2026 durch einen `git reset` auf HEAD verloren gegangen. Ausloeser war
+ein Endpunkt-Sweep ueber HTTP: `/api/system/tags/<x>` fuehrt ein echtes
+`git checkout` aus, und der Sweep hat diesen Endpunkt mit aufgerufen. Der
+`reflog` weist es aus:
+
+```
+2b095c8 HEAD@{0}: reset: moving to HEAD
+```
+
+Damit lagen 32 versionierte Dateien wieder im Auslieferungszustand — der
+gesamte Port, darunter `core/controller.py`, `core/core.py`, `core/hardware.py`
+und `core/step.py` mit Python-2-Syntax.
+
+**Wiederherstellung.** Neu erarbeitet aus diesem Dokument, das als einzige
+unversionierte Datei den Port überlebt hatte. Danach:
+
+- Der überlebende, versionierte Ersatz `modules/core/classy.py` (Position 2)
+  war unversehrt.
+- `tools/` (Testsuite und Route-Baseline) und `craftbeerpi.db` waren unversehrt.
+- `MIGRATION.md` selbst war unversehrt und diente als Spezifikation.
+- Für fünf Kern-Dateien existierte noch der **portierte Bytecode** in
+  `__pycache__` (18.10.2026). Ein Opcode-Vergleich gegen die Neuerstellung
+  ergab für `hardware.py`, `controller.py`, `step.py`, `db_mirgrate.py` und
+  `core.py` **semantische Identität** — die Rekonstruktion trifft den
+  verlorenen Port also nicht nur ungefähr, sondern exakt.
+
+**Lehre.** Der Port war über Tage uncommittet. Er hätte nach jeder Position
+committet werden müssen; eine Versionierungskontrolle, die den Stand nur im
+Arbeitsverzeichnis hält, ist kein Backup. Seit der Wiederherstellung liegt
+alles in einem Commit (siehe `git log`).
+
+**Lehre 2.** Ein Sweep über HTTP-Endpunkte ist ein Eingriff, keine Analyse.
+`tools/sweep_endpoints.py` ruft heute nur noch lesende GET-Routen auf und
+lässt Endpunkte mit Seiteneffekt explizit aus.
 
 ## Uebersicht
 
 | Pos | Inhalt | Status | Aufwand |
 |-----|---------|--------|---------|
 | — | Route-Baseline einfrieren | **fertig** | erledigt |
-| 1 | Python-3-Syntax und -Imports | **fertig** | erledigt |
+| 1 | Python-3-Syntax und -Imports | **fertig** | erledingt |
 | 2 | flask_classy -> eigenes Routing | **fertig** | erledigt |
 | 3 | `app.json_encoder` -> JSONProvider | **fertig** | erledigt |
 | 4 | Socket.io 5.x, eventlet raus | **fertig** | erledigt |
 | 5 | RPi.GPIO -> rpi-lgpio | offen | 0,5 Tage |
 | 6 | Async-Modell konsistent ziehen | offen | 0,5 Tage |
-| 7 | Plugin-Loading, requirements, install.sh | offen | 0,5 Tage |
+| 7 | Plugin-Loading, requirements, install.sh | teilweise | 0,5 Tage |
 | 8 | Hardware-Test PID + 1-Wire | offen | 2–4 Tage |
+
+### Ergänzungen aus der Wiederherstellung
+
+Über die ursprüngliche Spezifikation hinaus wurden vier Fehler gefunden und
+behoben, die der Port ebenfalls mitgenommen hatte:
+
+1. **JSON-Provider, unbekannte Typen.** Der Port hatte für alles Unbekannte
+   ein `TypeError` eingebaut, obwohl der ComplexEncoder aus Flask 0.12 dort
+   `return None` lieferte. Die Aufzählung der 36 Felder in "Was der alte
+   Encoder verschluckt hat" beschreibt nur den *statischen* Cache-Inhalt.
+   Zur Laufzeit entstehen weitere Instanzen — `Hysteresis` in
+   `Kettle.instance`, `ChilStep` in `active_step`. Damit antworteten
+   `/api/kettle/` und `/api/system/dump` mit **HTTP 500**, sobald ein Kessel
+   benutzt wurde. Der None-Zweig ist wiederhergestellt.
+2. **`logs/endpoints.py`**: CSV im Textmodus statt `'rb'` (der CSV-Parser
+   verlangt in Python 3 Strings), `map()` als Liste (Python-3-`map` ist ein
+   Iterator, den `json.dumps` nicht serialisieren kann), `download_name`
+   statt des in Flask 2.2 entfernten `attachment_filename`.
+3. **`tools/test_json.py`**: der Test prüfte den *ersten* Sensor der Datenbank
+   und schlug fehl, sobald die Installation eigene Sensoren hatte. Er sucht
+   jetzt den eigenen Test-Sensor und räumt ihn wieder auf.
+4. **`tools/sweep_endpoints.py`**: neu, als lesender Sweep mit Ausschlussliste.
+
+Position 7 ist als "teilweise" markiert, weil `requirements.txt` und das
+MQTT-Plugin jetzt stimmen, `install.sh` aber noch nicht geprüft ist.
 
 ## Das Route-Gate
 

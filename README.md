@@ -1,50 +1,150 @@
-# CraftBeerPi V3.0
+# CraftBeerPi 3.0
 
-This is CraftBeerPi version 3.0. It's currently in beta status.
+Eine Brau- und Fermentationssteuerung für den Raspberry Pi, portiert auf
+**Python 3 / Flask 3 / Socket.IO 5**.
 
-## Introduction Video
+Die Portierung ist in [MIGRATION.md](MIGRATION.md) dokumentiert — dort steht
+für jede Position, was geändert wurde, warum, und wie es verifiziert wurde.
 
-https://www.youtube.com/watch?v=YGARUJgFWh4&t=1s
+## Schnellstart
 
-## Installation
-
-Open a terminal window on Raspberry Pi and type:
-
-<code> git clone https://github.com/Manuel83/craftbeerpi3</code>
-
-This will download (clone) the software to your local Raspberry Pi.
-
-Type <code>cd craftbeerpi3</code> to navigate into the craftbeerpi folder.
-
-Type <code>sudo ./install.sh</code>
-
-## Hardware Wiring
-
-Here you will find a guide how to wire everything up.
-
-http://web.craftbeerpi.com/hardware/
-
-## ATTENTION
-
-CraftBeerPi 3.0 is a complete rewrite. Server as well as user interface. I recommend to use a second SD card for testing.
-
-## Docker-based development
-
-For developing this application or its plugins on a PC/Mac you can use the docker-compose file:
-
-``` shell
-$ docker-compose up
-...
-Starting craftbeerpi3_app_1 ... done
-Attaching to craftbeerpi3_app_1
-app_1  | [2018-08-13 12:54:44,264] ERROR in __init__: BUZZER not working
-app_1  | (1) wsgi starting up on http://0.0.0.0:5000
+```bash
+git clone https://github.com/Manuel83/craftbeerpi3
+cd craftbeerpi3
+sudo ./install.sh          # legt ein virtualenv an und installiert die Pakete
 ```
 
-The contents of this folder will be mounted to `/usr/src/craftbeerpi3` and the server will be accesible on `localhost:5000`.
+Danach starten:
 
-## Donation
+```bash
+.venv/bin/python run.py
+```
 
-CraftBeerPi is a free & open source project. If you like to support the project I happy about a donation:
+Der Server lauscht auf **Port 5000** und bindet an `0.0.0.0`, ist also im
+LAN erreichbar. Die Oberfläche liegt unter `/ui`, die REST-Schnittstelle
+unter `/api/`.
 
-[![Donate](https://www.paypal.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=2X9KR98KJ8YZQ)
+### Port ändern
+
+Der Port kommt aus der Konfiguration, nicht aus dem Code:
+
+```sql
+UPDATE config SET value = '8080' WHERE name = 'port';
+```
+
+Ohne diesen Eintrag gilt `5000`.
+
+## Voraussetzungen
+
+| | |
+|---|---|
+| Python | 3.9 oder neuer (entwickelt und getestet mit 3.14) |
+| Flask | 3.1.3 |
+| Flask-SocketIO | 5.7.0, `async_mode="threading"` |
+| Hardware | optional: 1-Wire für Temperatursensoren, GPIO für Relais |
+
+Die vollständige Liste steht in [requirements.txt](requirements.txt).
+
+## Aufbau
+
+```
+├── run.py                  # Einstiegspunkt des Servers
+├── config/                 # Init-Skript, DB-Schema, Splash-Screen, Version
+├── logs/                   # Laufzeit-Logs
+├── modules/                # Anwendungscode
+│   ├── actor/              # Aktor-API
+│   ├── base_plugins/       # mitgelieferte Plugins (GPIO, 1-Wire, Hysterese, MQTT, …)
+│   ├── core/               # Kern: Controller, Datenbank, Hardware-API
+│   ├── kettle/             # Kesselsteuerung
+│   ├── fermenter/          # Fermentationssteuerung
+│   ├── plugins/            # nachinstallierbare Benutzer-Plugins
+│   ├── recipe_import/      # BeerXML/Kleiner Brauhelfer Import
+│   ├── sensors/            # Sensor-API
+│   ├── steps/              # Brauschritte
+│   ├── system/             # System-Endpunkte
+│   └── ui/                 # Weboberfläche (Flask + Socket.IO)
+├── tools/                  # Testwerkzeuge und Route-Baseline
+├── update/                 # SQL-Migrationen
+└── upload/                 # hochgeladene Rezepte/Dateien
+```
+
+### Kern vs. Plugins
+
+`modules/base_plugins/` ist versionierter Teil des Projekts und lädt bei
+jedem Start. `modules/plugins/` ist für nachinstallierbare Plugins gedacht
+und wird vom Editor unter *Konfiguration → Plugin* verwaltet.
+
+`modules/core/classy.py` ist ein eigener Ersatz für `flask_classy` 0.6.10
+(2014, läuft unter Flask 3 nicht mehr). Er routet weiterhin nach
+**Methodennamen** statt nach HTTP-Verben — nötig, weil `/api/step/` sonst
+zwischen `getAll` (GET) und `/api/step/reset` (POST) kollidiert. Die
+107 Routen bleiben dadurch unverändert.
+
+## MQTT
+
+MQTT ist **Kernbestandteil** (`modules/base_plugins/mqtt`) und braucht kein
+Setup mehr außer dem Broker-Eintrag unter *Konfiguration → MQTT*:
+
+| Feld | Bedeutung |
+|---|---|
+| `MQTT_SERVER` | Hostname oder IP, Standard `localhost` |
+| `MQTT_PORT` | Standard `1883` |
+| `MQTT_USERNAME` / `MQTT_PASSWORD` | leer lassen für anonymen Zugriff |
+| `MQTT_TLS` | `true` schaltet TLS ein |
+| `MQTT_CA_CERT` / `MQTT_CERT` / `MQTT_KEY` | optionale Pfade für TLS |
+
+Die Verbindung kommt automatisch zustande und wird bei einem Broker-Neustart
+von selbst wieder aufgebaut; die Abos werden dabei erneut gesetzt. Es gibt
+drei Bausteine:
+
+- **MQTT_SENSOR** — Wert aus einem Topic lesen. „Payload Dictionary" legt
+  den Pfad in verschachteltem JSON fest (`Sensor.Value`); leer lassen
+  bedeutet Rohwert. Nur Skalare (Zahl, Text, Boolean) werden übernommen.
+- **MQTTActor** — sendet `{"state": "on"}` / `{"state": "off"}`.
+- **ESPEasyMQTT** — sendet die Rohwerte `1` / `0` nach ESPEasy-Konvention.
+
+Details im [Plugin-README](modules/base_plugins/mqtt/README.md).
+
+## Entwicklung und Prüfung
+
+Unter `tools/` liegt die Test-Infrastruktur. Sie prüft nicht nur, ob die
+Antwort stimmt, sondern auch, ob die **Routenliste** unverändert bleibt —
+der wahrscheinlichste Fehler beim Umbau von `flask_classy` auf ein
+Standard-`MethodView` ist das Wegfallen der Trailing-Slashes.
+
+```bash
+.venv/bin/python tools/snapshot_routes.py     # aktuelle Routen schreiben
+.venv/bin/python tools/compare_routes.py      # gegen die Baseline prüfen
+.venv/bin/python tools/test_api.py            # 32 REST-Aufrufe
+.venv/bin/python tools/test_json.py           # 16 Serialisierungsprüfungen
+.venv/bin/python tools/test_socket.py         # 21 Socket.IO-Prüfungen
+.venv/bin/python tools/test_socket_e2e.py     #  9 Prüfungen mit echtem WebSocket
+.venv/bin/python tools/sweep_endpoints.py     # alle GET-Routen, nur lesend
+```
+
+`compare_routes.py` und `sweep_endpoints.py` liefern bei Abweichung einen
+Exit-Code ungleich 0 und eignen sich damit als Gate.
+
+> `sweep_endpoints.py` ruft **ausschließlich lesende** GET-Routen auf und
+> lässt Endpunkte mit Seiteneffekt aus — insbesondere `/api/system/tags/<x>`,
+> das ein echtes `git checkout` ausführt. Ein früherer, ungefilterter Sweep
+> hat darüber versehentlich den Arbeitsstand im Repository überschrieben.
+
+## Häufige Probleme
+
+**`ERROR in __init__: BUZZER not working`**
+Kein Buzzer angeschlossen oder kein GPIO verfügbar (z. B. im
+Docker-Container). Der Server läuft weiter, nur der Piepton fehlt.
+
+**`No module named 'RPi'`**
+Kein Raspberry Pi. Die Hardware-Plugins werden dann übersprungen.
+
+**Die Live-Anzeige im alten UI bleibt leer**
+Der Socket spricht Engine.IO 4, das alte `bundle.js` spricht Engine.IO 3
+und wird abgelehnt. Die REST-Schnittstelle ist davon nicht betroffen. Eine
+neue Oberfläche mit aktuellem `socket.io-client` ist der saubere Weg.
+
+**Ein Endpunkt antwortet mit 500**
+`logs/app.log` nennt den Endpunkt und den Traceback. Häufigste Ursache ist
+ein Objekt im Cache, das der JSON-Provider nicht kennt — der Provider
+liefert für unbekannte Typen `null`, wie der ComplexEncoder aus Flask 0.12.

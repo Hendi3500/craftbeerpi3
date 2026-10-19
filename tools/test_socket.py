@@ -66,7 +66,15 @@ def run():
     client = app.test_client()
     client.post("/api/sensor/", json={"name": "Sock", "type": "DummyTempSensor",
                                      "config": {"temp": 5}})
-    sensor_id = list(cbpi.cache["sensors"])[0]
+    # Den selbst angelegten Sensor nehmen, nicht den ersten - in einer
+    # installierten Instanz gibt es bereits Sensoren.
+    sensor_id = None
+    for sid, s in cbpi.cache["sensors"].items():
+        if getattr(s, "name", None) == "Sock":
+            sensor_id = sid
+            break
+    if sensor_id is None:
+        sensor_id = list(cbpi.cache["sensors"])[0]
 
     try:
         cbpi.receive_sensor_value(sensor_id, 21.5)
@@ -147,6 +155,13 @@ def run():
     for name in ("SENSOR_UPDATE", "SWITCH_ACTOR", "UPDATE_KETTLE",
                  "UPDATE_FERMENTER", "UPDATE_ALL_STEPS", "NOTIFY"):
         check("Ereignis %s wird verwendet" % name, True)
+
+    # Aufraeumen: der Test-Sensor darf nicht in der Installation bleiben.
+    try:
+        client.delete("/api/sensor/%s" % sensor_id)
+        check("Test-Sensor wieder entfernt", True)
+    except Exception as e:
+        check("Test-Sensor wieder entfernt", False, "%s: %s" % (type(e).__name__, e))
 
     return len(PASS), len(FAIL)
 
