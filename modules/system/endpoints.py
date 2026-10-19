@@ -73,20 +73,32 @@ class SystemView(FlaskView):
         """
         Auf einen Git-Tag auswechseln.
 
-        Wichtig: dieser Endpunkt war die Ursache fuer einen Datenverlust.
-        Er resetet den Arbeitsbaum mit "git reset --hard" - das verwirft
-        **alle** uncommitteten Aenderungen. Ein GET darf aber keine
-        Seiteneffekte haben, und ein versehentliches Aufrufen (Browser-
-        Prefetch, Link im Chat, Crawler) hat so den kompletten Port
-        vernichtet.
+        Wichtig: dieser Endpunkt war zweimal die Ursache fuer einen
+        Datenverlust. Er resetet den Arbeitsbaum mit "git reset --hard"
+        und checkoutet danach - das verwirft **alle** uncommitteten
+        Aenderungen und stellt den Code auf den Stand des Tags zurueck.
+        Ein GET darf aber keine Seiteneffekte haben, und ein versehent-
+        liches Aufrufen (Browser-Prefetch, Link im Chat, Crawler) hat so
+        schon zweimal den kompletten Port vernichtet (19.10.2026).
 
         Deshalb gilt jetzt:
           1. Der Tag-Name wird gegen die tatsaechlich vorhandenen Tags
              geprueft. Freier Text kann nichts ausloesen.
           2. Ist der Arbeitsbaum schmutzig (uncommittete Aenderungen),
              wird der Checkout **verweigert** und mit HTTP 409 gemeldet.
-             Das "reset --hard" passiert nur bei sauberem Baum - dann ist
-             es ein No-Op.
+          3. **Der Ziel-Tag muss den aktuellen Stand enthalten.**
+             Genau daran scheitert der Angriff: Ein Checkout auf einen
+             aelteren Tag (z.B. "3.0" von 2019) entfernt den Port aus
+             dem Arbeitsbaum, obwohl der Arbeitsbaum sauber ist und der
+             Port committet ist. Schritt 2 allein hat das nicht
+             verhindert - er schuetzt nur uncommittete Aenderungen.
+             Ein Checkout ist deshalb nur erlaubt, wenn der Tag-Commit
+             den aktuellen HEAD **enthaelt** (`git merge-base --is-ancestor
+             HEAD <tag>`). Ein aelterer Tag verliert immer Commits aus
+             dem Arbeitsbaum und wird mit HTTP 409 abgelehnt.
+          4. Vor dem Checkout wird der aktuelle HEAD als Branch
+             "backup/pre-tag-checkout" gesichert. Der Zustand vor dem
+             Checkout ist damit immer wiederherstellbar.
 
         Das Frontend ruft den Endpunkt weiterhin per GET auf, deshalb
         bleibt das Verb unveraendert.
@@ -120,6 +132,54 @@ class SystemView(FlaskView):
                         "Bitte zuerst committen oder zurücksetzen.",
                         type="danger", timeout=None)
             return ('Working tree is dirty - commit or stash first', 409)
+
+        # 3. Der Ziel-Tag muss den aktuellen Stand enthalten.
+        #    Ein aelterer Tag (z.B. "3.0" von 2019) verliert immer
+        #    Commits aus dem Arbeitsbaum - unabhaengig davon, ob der
+        #    Arbeitsbaum sauber ist. Genau das hat den Port zerstoert.
+        try:
+            branch = repo.active_branch
+        except Exception:
+            branch = None
+
+        if branch is None:
+            # Detached HEAD: der Zustand laesst sich keinem Branch zuordnen,
+            # ein Checkout koennte ihn ins Nichts zerlegen.
+            cbpi.app.logger.warning(
+                "Checkout von '%s' verweigert: HEAD ist losgeloest" % name)
+            return ('HEAD is detached - refusing to check out a tag', 409)
+
+        try:
+            # True, wenn HEAD ein Vorfahr des Tags ist - der Tag enthaelt
+            # den aktuellen Stand also und der Checkout verliert nichts.
+            enthaelt_aktuellen_stand = repo.is_ancestor(branch.commit, repo.commit(name))
+        except Exception as e:
+            cbpi.app.logger.error("Tag-Historie nicht prüfbar: %s" % e)
+            return ('Tag history not checkable', 500)
+
+        if not enthaelt_aktuellen_stand:
+            cbpi.app.logger.warning(
+                "Checkout von '%s' verweigert: der Tag enthaelt den aktuellen "
+                "Stand von '%s' nicht" % (name, branch.name))
+            cbpi.notify("Checkout verweigert",
+                        "Der Tag '%s' ist älter als der aktuelle Stand von "
+                        "'%s'. Ein Checkout dorthin würde die Commits "
+                        "zwischen dem Tag und dem aktuellen Stand aus dem "
+                        "Arbeitsbaum entfernen."
+                        % (name, branch.name),
+                        type="danger", timeout=None)
+            return ('Tag %s is older than %s - refusing' % (name, branch.name), 409)
+
+        # 4. Sicherung des aktuellen Stands, bevor der Arbeitsbaum
+        #    umgestellt wird. Danach ist der Zustand wiederherstellbar.
+        try:
+            repo.create_head('backup/pre-tag-checkout', branch.commit)
+            cbpi.app.logger.info(
+                "Sicherung fuer Tag-Checkout angelegt: backup/pre-tag-checkout -> %s"
+                % branch.commit.hexsha[:8])
+        except Exception as e:
+            cbpi.app.logger.error("Sicherungs-Branch nicht anlegbar: %s" % e)
+            return ('Could not create backup branch', 500)
 
         try:
             repo.git.reset('--hard')

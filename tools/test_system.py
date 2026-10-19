@@ -106,6 +106,36 @@ def run():
     check("Arbeitsbaum nach dem Test wiederhergestellt",
           not repo.is_dirty(untracked_files=False) or True)
 
+    # 3. Sauberer Arbeitsbaum, aber der Tag ist AELTER als der aktuelle
+    #    Stand. Das ist der Fall, der am 19.10.2026 den kompletten Port
+    #    vernichtet hat: der Arbeitsbaum war sauber (alles committet),
+    #    der Checkout auf den 2019er Tag hat den Port trotzdem aus dem
+    #    Arbeitsbaum gerissen. Der Endpunkt muss das ablehnen.
+    try:
+        branch = repo.active_branch
+    except Exception:
+        branch = None
+    check("Testrepo hat einen aktiven Branch", branch is not None)
+
+    if branch is not None:
+        # Der aktuelle HEAD muss den Tag *enthalten*, sonst waere ein
+        # Checkout verlustbehaftet. Fuer "3.0" (2019) ist das nicht der
+        # Fall, solange der Port auf master liegt.
+        aelter = not repo.is_ancestor(branch.commit, repo.commit("3.0"))
+        if aelter:
+            antwort = view.checkout_tag("3.0")
+            status = antwort[1] if isinstance(antwort, tuple) and len(antwort) > 1 else None
+            check("Aelterer Tag wird bei sauberem Baum verweigert (409)",
+                  status == 409, "Status %s" % status)
+            # Der Branch muss unveraendert sein.
+            check("Branch blieb unveraendert",
+                  repo.active_branch.name == branch.name
+                  and repo.head.commit.hexsha == branch.commit.hexsha,
+                  "HEAD %s" % repo.head.commit.hexsha[:8])
+        else:
+            check("Aelterer Tag wird bei sauberem Baum verweigert (409)",
+                  True, "uebersprungen: Branch enthaelt den Tag bereits")
+
     print("\n--- Konfigurationswerte robust --------------------------------")
     # 1-Wire-Offset
     from modules.base_plugins.one_wire import ONE_WIRE_SENSOR
