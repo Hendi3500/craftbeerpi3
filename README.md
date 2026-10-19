@@ -166,9 +166,20 @@ liefert für unbekannte Typen `null`, wie der ComplexEncoder aus Flask 0.12.
 lässt sich nur auf dem Pi bauen.
 
 **`GET /api/system/tags/<name>` antwortet mit 409**
-Der Endpunkt verweigert den Checkout, solange der Arbeitsbaum
-uncommittete Änderungen hat — das `git reset --hard` dahinter hätte sie
-verworfen. Erst committen, dann erneut versuchen.
+Der Endpunkt verweigert den Checkout in zwei Fällen:
+
+- Der Arbeitsbaum hat uncommittete Änderungen — das `git reset --hard`
+  dahinter würde sie verwerfen. Erst committen, dann erneut versuchen.
+- Der Tag ist **älter als der aktuelle Stand**. Ein Checkout auf einen
+  alten Tag entfernt die Commits zwischen dem Tag und dem aktuellen
+  Stand aus dem Arbeitsbaum — auch dann, wenn alles committet ist. Das
+  hat am 19.10.2026 den kompletten Python-3-Port vernichtet, obwohl der
+  Arbeitsbaum sauber war. Erlaubt ist nur ein Tag, der den aktuellen
+  HEAD enthält.
+
+Vor dem Checkout wird der aktuelle Stand als Branch
+`backup/pre-tag-checkout` gesichert, damit der Zustand wiederherstellbar
+bleibt.
 
 **`CRITICAL: We need to talk about your installation`**
 Python 3.12 oder neuer auf einem System, in dem `rpi-lgpio` nicht

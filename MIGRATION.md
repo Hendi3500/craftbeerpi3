@@ -36,6 +36,22 @@ committet werden müssen; eine Versionierungskontrolle, die den Stand nur im
 Arbeitsverzeichnis hält, ist kein Backup. Seit der Wiederherstellung liegt
 alles in einem Commit (siehe `git log`).
 
+**Zweiter Verlust (19.10.2026, 17:15).** Der Endpoint-Test der neuen UI
+rief `GET /api/system/tags/3.0` auf und traf denselben Endpunkt erneut.
+Der bis dahin eingebaute Schutz (Checkout nur bei sauberem Arbeitsbaum)
+griff **nicht**: der Port war inzwischen committet, der Arbeitsbaum also
+sauber, und der Endpunkt ließ den Checkout durch. `git reset --hard` +
+`checkout 3.0` hat 56 Dateien auf den 2019er Stand zurückgesetzt. Der
+Port war über `master` gerettet (der Branch-Zeiger blieb stehen), aber
+der Arbeitsbaum sah kurzzeitig aus wie vor der Portierung.
+
+Konsequenz (Commit `2b586bc`): Der Endpunkt prüft jetzt zusätzlich, ob
+der Ziel-Tag den aktuellen HEAD **enthält**
+(`git merge-base --is-ancestor HEAD <tag>`). Ein älterer Tag wird mit
+HTTP 409 abgelehnt, und vor dem Checkout wird der aktuelle Stand als
+Branch `backup/pre-tag-checkout` gesichert. `tools/test_system.py`
+prüft beide Regeln.
+
 **Lehre 2.** Ein Sweep über HTTP-Endpunkte ist ein Eingriff, keine Analyse.
 `tools/sweep_endpoints.py` ruft heute nur noch lesende GET-Routen auf und
 lässt Endpunkte mit Seiteneffekt explizit aus.
