@@ -50,6 +50,34 @@ class BaseView(FlaskView):
         pass
 
 
+    def _hole_eintrag(self, id):
+        """
+        Den Eintrag mit der Id aus dem Cache holen, oder None.
+
+        Fehlt er im Cache, wird die Datenbank gefragt. Ein Client kann
+        eine Id schicken, die es nicht (mehr) gibt - etwa, weil sein
+        Zustand aelter ist als der des Backends. Das war kein
+        theoretischer Fall: die Oberflaeche hat einen Fermenter geloescht,
+        der im Backend schon weg war, und bekam einen 500er mit
+        KeyError statt einer sauberen Antwort.
+
+        Liegt die Zeile in der Datenbank, aber nicht im Cache, wird sie
+        nachgetragen - der Cache ist dann der aeltere Teil.
+        """
+        cache = self.api.cache.get(self.cache_key)
+
+        if cache is None:
+            return None
+
+        eintrag = cache.get(id)
+
+        if eintrag is None:
+            eintrag = self.model.get_one(id)
+            if eintrag is not None:
+                cache[id] = eintrag
+
+        return eintrag
+
     @route('/<int:id>', methods=["PUT"])
     def put(self, id):
         data = request.json
@@ -59,11 +87,14 @@ class BaseView(FlaskView):
         except:
             pass
         if self.api.cache.get(self.cache_key) is not None:
-            self._pre_put_callback(self.api.cache.get(self.cache_key)[id])
-            self.api.cache.get(self.cache_key)[id].__dict__.update(**data)
-            m = self.model.update(**self.api.cache.get(self.cache_key)[id].__dict__)
-            self._post_put_callback(self.api.cache.get(self.cache_key)[id])
-            return json.dumps(self.api.cache.get(self.cache_key)[id])
+            eintrag = self._hole_eintrag(id)
+            if eintrag is None:
+                return ('Not found', 404)
+            self._pre_put_callback(eintrag)
+            eintrag.__dict__.update(**data)
+            m = self.model.update(**eintrag.__dict__)
+            self._post_put_callback(eintrag)
+            return json.dumps(eintrag)
         else:
             m = self.model.update(**data)
 
@@ -80,7 +111,14 @@ class BaseView(FlaskView):
     @route('/<int:id>', methods=["DELETE"])
     def delete(self, id):
         if self.api.cache.get(self.cache_key) is not None:
-            self._pre_delete_callback(self.api.cache.get(self.cache_key)[id])
+            eintrag = self._hole_eintrag(id)
+            if eintrag is None:
+                # Unbekannte Id: 404 statt eines 500ers mit KeyError.
+                # Ein Client mit veraltetem Zustand loescht sonst Objekte,
+                # die es nicht mehr gibt, und der Server beantwortet das
+                # mit einem Stacktrace.
+                return ('Not found', 404)
+            self._pre_delete_callback(eintrag)
             del self.api.cache.get(self.cache_key)[id]
         m = self.model.delete(id)
 

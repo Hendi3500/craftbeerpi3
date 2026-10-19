@@ -313,6 +313,37 @@ Zeilen.
   dem Start des laufenden Backends", und nach dem Neustart ist das neue
   Backend das, wogegen alles andere verglichen wird.
 
+## Befund aus dem Server-Log: 500 statt 404 bei unbekannter Id
+
+Am 19.10.2026 um 17:35 schickte die Oberflaeche (192.168.0.193) fuenfmal
+`PUT` und `DELETE` auf Objekte, die es im Backend nicht (mehr) gab:
+
+```
+PUT    /api/fermenter/1  -> 500  KeyError: 1   (3x)
+DELETE /api/fermenter/1  -> 500  KeyError: 1   (2x)
+DELETE /api/sensor/2     -> 500  KeyError: 2   (2x)
+```
+
+Ursache war nicht der Port, sondern der Original-Kern: `BaseView.put`
+und `BaseView.delete` griffen mit `self.cache[id]` direkt auf den Cache
+zu, ohne zu pruefen, ob es die Id ueberhaupt gibt. Ein Client mit
+veraltetem Zustand - die Oberflaeche hatte einen Fermenter im State, den
+das Backend schon nicht mehr hatte - bekam einen **500er mit
+Stacktrace** statt einer sauberen Antwort.
+
+`modules/core/baseview.py` hat jetzt `_hole_eintrag()`: fehlt die Id im
+Cache, wird die Datenbank gefragt (und der Cache nachgetragen, falls er
+der aeltere Teil ist), und liegt sie auch dort nicht, antworten PUT und
+DELETE mit **404**. Das betrifft alle Views, die von `BaseView` erben:
+Sensor, Actor, Kettle, Step, Fermenter und Config.
+
+Die Log-Ausgabe selbst hat einen Nebeneffekt, den man kennen sollte:
+**alle Prozesse, die `modules` importieren, schreiben in dieselbe
+`logs/app.log`** - das `logging.basicConfig(filename='./logs/app.log')` in
+`modules/app_config.py`. Testlaeufe und der Server teilen sich die Datei.
+Fehler aus einem Test sind im Log also nicht von einem Serverfehler zu
+unterscheiden, ausser an der Quell-IP der Requests.
+
 ## Testwerkzeuge
 
 | Skript | Prüft | Anzahl |
@@ -329,6 +360,7 @@ Zeilen.
 | `test_plugins.py` | Plugin-Management, Traversal | 42/42 |
 | `test_migration.py` | SQL-Migrationen, Frischinstallation | 13/13 |
 | `test_kern_uebernahmen.py` | die aus den Plugin-Updates uebernommenen Funktionen | 43/43 |
+| `test_unbekannte_id.py` | PUT/DELETE auf eine unbekannte Id | 21/21 |
 
 Alle Skripte liefern bei Abweichung einen Exit-Code ungleich 0 und eignen
 sich damit als Gate. `test_migration.py` arbeitet in einem eigenen
