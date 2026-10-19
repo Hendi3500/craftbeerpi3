@@ -76,21 +76,40 @@ class LogView(FlaskView):
     def get_logs_as_json(self, t, id):
         data = request.json
         result = []
+
+        # Unbekannte Ids: Der Client kann eine Id schicken, die es nicht
+        # (mehr) gibt - etwa weil sein Zustand aelter ist als der des
+        # Backends. Ohne diese Pruefung gab es hier einen 500er mit
+        # AttributeError ('NoneType' hat kein 'logic'/'name'), also
+        # dieselbe Fehlerklasse, die modules/core/baseview.py inzwischen
+        # mit 404 beantwortet.
         if t == "s":
-            name = cbpi.cache.get("sensors").get(id).name
-            result.append({"name": name, "data": self.read_log_as_json("sensor", id)})
+            sensor = cbpi.cache.get("sensors").get(id)
+            if sensor is None:
+                return ('Sensor %s not found' % id, 404)
+            result.append({"name": sensor.name, "data": self.read_log_as_json("sensor", id)})
 
         if t == "k":
             kettle = cbpi.cache.get("kettle").get(id)
+            if kettle is None:
+                return ('Kettle %s not found' % id, 404)
             # list(): map() liefert in Python 3 einen Iterator, den json.dumps
             # nicht serialisieren kann.
+            controller = cbpi.get_controller(kettle.logic)
+            if controller is None:
+                return ('No controller for kettle %s' % id, 404)
             result = [self.convert_chart_data_to_json(x)
-                      for x in cbpi.get_controller(kettle.logic).get("class").chart(kettle)]
+                      for x in controller.get("class").chart(kettle)]
 
         if t == "f":
             fermenter = cbpi.cache.get("fermenter").get(id)
+            if fermenter is None:
+                return ('Fermenter %s not found' % id, 404)
+            controller = cbpi.get_fermentation_controller(fermenter.logic)
+            if controller is None:
+                return ('No controller for fermenter %s' % id, 404)
             result = [self.convert_chart_data_to_json(x)
-                      for x in cbpi.get_fermentation_controller(fermenter.logic).get("class").chart(fermenter)]
+                      for x in controller.get("class").chart(fermenter)]
 
         return json.dumps(result)
 

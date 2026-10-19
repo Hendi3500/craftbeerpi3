@@ -106,6 +106,17 @@ def run():
     check("PUT /api/fermenter/1 (unbekannt) -> 404 statt 500",
           r.status_code == 404, "Status %s" % r.status_code)
 
+    print("\n--- Chart-Endpoint: unbekannte Id --------------------------")
+    # /api/logs/<t>/<id> liest direkt aus dem Cache. Fehlt die Id, gab
+    # es einen 500er mit AttributeError ('NoneType' hat kein 'logic').
+    # Die Oberflaeche fragt die Charts fuer alle Kessel, Sensoren und
+    # Fermenter an - ein zwischenzeitlich geloeschtes Objekt hat sie
+    # damit immer getroffen.
+    for t, name in (("s", "Sensor"), ("k", "Kessel"), ("f", "Fermenter")):
+        r = client.post("/api/logs/%s/99999" % t, json={})
+        check("POST /api/logs/%s/99999 (unbekannt) -> 404 statt 500" % t,
+              r.status_code == 404, "Status %s" % r.status_code)
+
     return len(PASS), len(FAIL)
 
 
