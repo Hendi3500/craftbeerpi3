@@ -28,38 +28,38 @@ PLUGIN_DIR = "./modules/plugins"
 # "../../logs" jedes Verzeichnis loeschen (deletePlugin macht ein
 # shutil.rmtree) oder in beliebige Verzeichnisse schreiben. Der Server
 # bindet an 0.0.0.0, ist also im LAN erreichbar.
-NAME_MUSTER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
+NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 
 # Obergrenze fuer den Namen. Das Dateisystem erlaubt 255 Bytes pro
 # Eintrag, ein zu langer Name wuerde erst beim Anlegen mit ENAMETOOLONG
 # scheitern.
-NAME_MAX_LAENGE = 100
+NAME_MAX_LENGTH = 100
 
 
-def _plugin_pfad(name):
+def _plugin_path(name):
     """
     Sicheren Pfad fuer ein Plugin liefern.
 
     Gibt None zurueck, wenn der Name ungueltig ist oder aus dem
     Plugin-Verzeichnis herausfuehren wuerde.
     """
-    if not name or not isinstance(name, str) or not NAME_MUSTER.match(name):
+    if not name or not isinstance(name, str) or not NAME_PATTERN.match(name):
         return None
-    if len(name) > NAME_MAX_LAENGE:
+    if len(name) > NAME_MAX_LENGTH:
         return None
-    basis = os.path.abspath(PLUGIN_DIR)
-    pfad = os.path.abspath(os.path.join(basis, name))
+    base = os.path.abspath(PLUGIN_DIR)
+    path = os.path.abspath(os.path.join(base, name))
     try:
-        if os.path.commonpath([basis, pfad]) != basis:
+        if os.path.commonpath([base, path]) != base:
             return None
     except ValueError:
         # Verschiedene Laufwerke oder Wurzeln - auf Windows ein
         # Sonderfall, auf Linux nicht moeglich.
         return None
-    return pfad
+    return path
 
 
-def _ist_plugin_verzeichnis(pfad):
+def _is_plugin_directory(path):
     """
     True, wenn ein Eintrag in modules/plugins bzw. modules/base_plugins ein
     echtes Plugin ist.
@@ -70,10 +70,10 @@ def _ist_plugin_verzeichnis(pfad):
     Klammer-Pfade und Punkt-Verzeichnisse sind aus demselben Grund keine
     Plugins.
     """
-    name = os.path.basename(pfad.rstrip("/"))
+    name = os.path.basename(path.rstrip("/"))
     if name.startswith(".") or name.startswith("_"):
         return False
-    return os.path.isdir(pfad)
+    return os.path.isdir(path)
 
 def merge(source, destination):
     """
@@ -102,7 +102,7 @@ def getPlugins():
     for filename in os.listdir(PLUGIN_DIR):
         if filename.endswith(".DS_Store") or filename.endswith(".py") or filename.endswith(".pyc"):
             continue
-        if not _ist_plugin_verzeichnis(os.path.join(PLUGIN_DIR, filename)):
+        if not _is_plugin_directory(os.path.join(PLUGIN_DIR, filename)):
             continue
         result.append(filename)
 
@@ -115,7 +115,7 @@ def getFile(name):
     :param name: plugin name
     :return: the plugin code from __init__.py
     """
-    return send_from_directory(_plugin_pfad(name) or PLUGIN_DIR, "__init__.py")
+    return send_from_directory(_plugin_path(name) or PLUGIN_DIR, "__init__.py")
 
 @blueprint.route('/<name>', methods=['PUT'])
 def createPlugin(name):
@@ -125,12 +125,12 @@ def createPlugin(name):
     :param name: the plugin name
     :return: empty http response 204
     """
-    pfad = _plugin_pfad(name)
-    if pfad is None:
+    path = _plugin_path(name)
+    if path is None:
         return ('Invalid plugin name', 400)
-    if not os.path.exists(pfad):
-        os.makedirs(pfad)
-        with open(os.path.join(pfad, "__init__.py"), "wb") as fo:
+    if not os.path.exists(path):
+        os.makedirs(path)
+        with open(os.path.join(path, "__init__.py"), "wb") as fo:
             fo.write(b"")
         cbpi.emit_message("PLUGIN %s CREATED" % (name))
         return ('', 204)
@@ -149,12 +149,12 @@ def saveFile(name):
     :param name: the plugin name
     :return: empty http reponse
     """
-    pfad = _plugin_pfad(name)
-    if pfad is None:
+    path = _plugin_path(name)
+    if path is None:
         return ('Invalid plugin name', 400)
-    if not os.path.isdir(pfad):
+    if not os.path.isdir(path):
         return ('Dir Not found', 500)
-    with open(os.path.join(pfad, "__init__.py"), "wb") as fo:
+    with open(os.path.join(path, "__init__.py"), "wb") as fo:
         fo.write(request.get_data())
     cbpi.emit_message("PLUGIN %s SAVED" % (name))
 
@@ -168,12 +168,12 @@ def deletePlugin(name):
     :param name: plugin name
     :return: HTTP 204 if ok - HTTP 500 if plugin not exists
     """
-    pfad = _plugin_pfad(name)
-    if pfad is None:
+    path = _plugin_path(name)
+    if path is None:
         return ('Invalid plugin name', 400)
-    if os.path.isdir(pfad) is False:
+    if os.path.isdir(path) is False:
         return ('Dir Not found', 500)
-    shutil.rmtree(pfad)
+    shutil.rmtree(path)
     cbpi.notify("Plugin deleted", "Plugin %s deleted successfully" % name)
     return ('', 204)
 
@@ -191,7 +191,7 @@ def reload_plugin(name):
     Das Modul-Register ist das lokale ``modules``-Dictionary, in das
     loadCorePlugins() und loadPlugins() schreiben.
     """
-    if _plugin_pfad(name) is None:
+    if _plugin_path(name) is None:
         return ('Invalid plugin name', 400)
     try:
         if name in modules:
@@ -222,8 +222,8 @@ def plugins():
 @blueprint.route('/<name>/download', methods=['POST'])
 def download_addon(name):
 
-    pfad = _plugin_pfad(name)
-    if pfad is None:
+    path = _plugin_path(name)
+    if path is None:
         return ('Invalid plugin name', 400)
 
     plugin = cbpi.cache["plugins"].get(name)
@@ -234,7 +234,7 @@ def download_addon(name):
         return ('', 404)
     plugin["loading"] = True
     try:
-        Repo.clone_from(plugin.get("repo_url"), pfad)
+        Repo.clone_from(plugin.get("repo_url"), path)
         cbpi.notify("Download successful", "Plugin %s downloaded successfully" % name)
     except Exception as e:
         cbpi.notify("Download failed", str(e), type="danger", timeout=None)
@@ -246,13 +246,13 @@ def download_addon(name):
 
 @blueprint.route('/<name>/update', methods=['POST'])
 def update_addon(name):
-    pfad = _plugin_pfad(name)
-    if pfad is None:
+    path = _plugin_path(name)
+    if path is None:
         return ('Invalid plugin name', 400)
-    if not os.path.isdir(pfad):
+    if not os.path.isdir(path):
         return ('Dir Not found', 500)
     try:
-        repo = Repo(pfad)
+        repo = Repo(path)
         o = repo.remotes.origin
         o.pull()
     except Exception as e:
@@ -265,7 +265,7 @@ def update_addon(name):
 def loadCorePlugins():
     for filename in os.listdir("./modules/base_plugins"):
 
-        if _ist_plugin_verzeichnis("./modules/base_plugins/" + filename) is False:
+        if _is_plugin_directory("./modules/base_plugins/" + filename) is False:
             continue
         try:
             modules[filename] = import_module("modules.base_plugins.%s" % (filename))
@@ -277,7 +277,7 @@ def loadCorePlugins():
 
 def loadPlugins():
     for filename in os.listdir(PLUGIN_DIR):
-        if _ist_plugin_verzeichnis(os.path.join(PLUGIN_DIR, filename)) is False:
+        if _is_plugin_directory(os.path.join(PLUGIN_DIR, filename)) is False:
             continue
         try:
             modules[filename] = import_module("modules.plugins.%s" % (filename))

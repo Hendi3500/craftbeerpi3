@@ -106,7 +106,7 @@ class ComplexJSONProvider(DefaultJSONProvider):
         # Kettle.instance) oder ein Schritt laeuft (ChilStep in active_step).
         # Ohne diesen Zweig liefern /api/kettle/ und /api/system/dump dann
         # HTTP 500, sobald ein Kessel benutzt wird.
-        app.logger.debug("JSON: unbekannter Typ %s wird zu null",
+        app.logger.debug("JSON: unknown type %s becomes null",
                          type(o).__name__)
         return None
 

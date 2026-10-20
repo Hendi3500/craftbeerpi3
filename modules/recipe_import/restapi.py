@@ -50,7 +50,7 @@ class RESTImport(FlaskView):
             self.api.notify(headline="Recipe %s loaded successfully" % name, message="")
         except Exception as e:
             self.api.notify(headline="Failed to load Recipe", type="danger", message=str(e))
-            m = str(e.message)
+            m = str(e)
             return (str(e), 500)
 
         return ('', 204)

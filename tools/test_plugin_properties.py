@@ -50,7 +50,7 @@ def run():
 
     print("--- Die Brauschritte haben ihre Felder ------------------------")
     # Die Felder, die ein Brauschritt im Dialog zeigen muss.
-    erwartet = {
+    expected = {
         "MashStep": ["temp", "timer", "kettle"],
         "MashInStep": ["temp", "kettle"],
         "ChilStep": ["timer"],
@@ -63,51 +63,51 @@ def run():
 
     step_types = cbpi.cache.get("step_types") or {}
 
-    for typ, felder in erwartet.items():
-        eintrag = step_types.get(typ)
-        if eintrag is None:
-            check("der Schritttyp %s ist registriert" % typ, False)
+    for step_type, fields in expected.items():
+        entry = step_types.get(step_type)
+        if entry is None:
+            check("der Schritttyp %s ist registriert" % step_type, False)
             continue
 
-        vorhanden = [p.get("name") for p in eintrag.get("properties", [])]
-        fehlend = [f for f in felder if f not in vorhanden]
-        check("%s hat %d Properties" % (typ, len(vorhanden)),
-              len(vorhanden) > 0, repr(vorhanden))
-        check("%s hat die Felder %s" % (typ, ", ".join(felder)),
-              not fehlend, "fehlend: %s" % repr(fehlend))
+        present = [p.get("name") for p in entry.get("properties", [])]
+        missing = [f for f in fields if f not in present]
+        check("%s hat %d Properties" % (step_type, len(present)),
+              len(present) > 0, repr(present))
+        check("%s hat die Felder %s" % (step_type, ", ".join(fields)),
+              not missing, "fehlend: %s" % repr(missing))
 
     print("\n--- Jeder Schritttyp hat mindestens ein Feld -------------------")
-    for typ, eintrag in sorted(step_types.items()):
-        check("%s hat mindestens ein Property" % typ,
-              len(eintrag.get("properties", [])) > 0,
-              repr(eintrag.get("properties")))
+    for step_type, entry in sorted(step_types.items()):
+        check("%s hat mindestens ein Property" % step_type,
+              len(entry.get("properties", [])) > 0,
+              repr(entry.get("properties")))
 
     print("\n--- Die anderen Pluginarten auch ----------------------------")
-    for key, mindestens in (("actor_types", 1), ("sensor_types", 1),
-                            ("controller_types", 1),
-                            ("fermentation_controller_types", 1)):
-        for typ, eintrag in sorted((cbpi.cache.get(key) or {}).items()):
+    for key, minimum in (("actor_types", 1), ("sensor_types", 1),
+                         ("controller_types", 1),
+                         ("fermentation_controller_types", 1)):
+        for plugin_type, entry in sorted((cbpi.cache.get(key) or {}).items()):
             # Der Dummy-Aktor hat absichtlich keine Felder.
-            if typ == "Dummy":
+            if plugin_type == "Dummy":
                 continue
-            check("%s/%s hat Properties" % (key, typ),
-                  len(eintrag.get("properties", [])) >= mindestens,
-                  repr(eintrag.get("properties")))
+            check("%s/%s hat Properties" % (key, plugin_type),
+                  len(entry.get("properties", [])) >= minimum,
+                  repr(entry.get("properties")))
 
     print("\n--- Klasse und Instanz gleichzeitig --------------------------")
     # Die beiden Anforderungen widersprechen sich nicht: die Klasse
     # traegt die Definition, die Instanz den Wert.
-    for typ, eintrag in sorted(step_types.items()):
-        klasse = eintrag.get("class")
-        if klasse is None:
+    for step_type, entry in sorted(step_types.items()):
+        klass = entry.get("class")
+        if klass is None:
             continue
-        for name in [p.get("name") for p in eintrag.get("properties", [])]:
-            attribut = getattr(klasse, name, None)
+        for name in [p.get("name") for p in entry.get("properties", [])]:
+            attribute = getattr(klass, name, None)
             # StepProperty hat eigene Klassen fuer Actor, Sensor und
             # Kettle - deshalb wird gegen die gemeinsame Basis geprueft.
-            check("%s.%s ist an der Klasse eine Property" % (typ, name),
-                  isinstance(attribut, PropertyType),
-                  repr(attribut))
+            check("%s.%s ist an der Klasse eine Property" % (step_type, name),
+                  isinstance(attribute, PropertyType),
+                  repr(attribute))
 
     print("\n--- Die Instanz rechnet mit Werten ---------------------------")
     from modules.base_plugins.brew_steps import BoilStep, MashStep

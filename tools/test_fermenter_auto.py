@@ -56,10 +56,10 @@ def run():
 
     for name in ("heater_offset_min", "heater_offset_max",
                  "cooler_offset_min", "cooler_offset_max"):
-        wert = getattr(inst, name)
+        value = getattr(inst, name)
         check("%s ist eine Zahl und kein Property-Objekt" % name,
-              isinstance(wert, (int, float)) and not isinstance(wert, Property.Number),
-              repr(wert))
+              isinstance(value, (int, float)) and not isinstance(value, Property.Number),
+              repr(value))
 
     # Die Vorgabewerte sind die der Property-Deklaration.
     check("Vorgabewert wird uebernommen (heater_offset_min = 0)",
@@ -102,52 +102,52 @@ def run():
     inst3.cooler_on = lambda *a, **kw: None
     inst3.cooler_off = lambda *a, **kw: None
 
-    schlaeufe = [0]
+    loops = [0]
 
     def _sleep(seconds):
-        schlaeufe[0] += 1
-        if schlaeufe[0] >= 3:
+        loops[0] += 1
+        if loops[0] >= 3:
             # Nach drei Zyklen ist genug geprueft.
             inst3.stop()
 
     inst3.sleep = _sleep
     inst3.init()
 
-    gestorben = None
+    died = None
     try:
         inst3.run()
     except Exception as e:
-        gestorben = e
+        died = e
 
     check("der Controller stirbt nicht an einem fehlenden Sensorwert",
-          gestorben is None, repr(gestorben))
+          died is None, repr(died))
     check("der Controller hat den Zyklus uebersprungen statt abzubrechen",
-          schlaeufe[0] >= 3, repr(schlaeufe[0]))
+          loops[0] >= 3, repr(loops[0]))
 
     print("\n--- Der Controller rechnet mit Sensorwert ----------------------")
     inst4 = Hysteresis(api=cbpi, fermenter_id=1, heater=4, sensor=2)
     inst4.get_temp = lambda *a, **kw: 18.0
     inst4.get_target_temp = lambda *a, **kw: 20.0
-    geschaltet = []
-    inst4.heater_on = lambda *a, **kw: geschaltet.append("heater_on")
-    inst4.heater_off = lambda *a, **kw: geschaltet.append("heater_off")
-    inst4.cooler_on = lambda *a, **kw: geschaltet.append("cooler_on")
-    inst4.cooler_off = lambda *a, **kw: geschaltet.append("cooler_off")
+    switched = []
+    inst4.heater_on = lambda *a, **kw: switched.append("heater_on")
+    inst4.heater_off = lambda *a, **kw: switched.append("heater_off")
+    inst4.cooler_on = lambda *a, **kw: switched.append("cooler_on")
+    inst4.cooler_off = lambda *a, **kw: switched.append("cooler_off")
 
-    zyklen = [0]
+    cycles = [0]
 
     def _sleep2(seconds):
-        zyklen[0] += 1
-        if zyklen[0] >= 2:
+        cycles[0] += 1
+        if cycles[0] >= 2:
             inst4.stop()
 
     inst4.sleep = _sleep2
     inst4.init()
     inst4.run()
     check("unter der Zieltemperatur wird geheizt",
-          "heater_on" in geschaltet, repr(geschaltet))
+          "heater_on" in switched, repr(switched))
     check("ueber der Zieltemperatur wird nicht geheizt",
-          "heater_off" in geschaltet, repr(geschaltet))
+          "heater_off" in switched, repr(switched))
 
     return len(PASS), len(FAIL)
 

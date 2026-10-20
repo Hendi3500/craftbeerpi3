@@ -95,7 +95,7 @@ def _as_bool(value, default=False):
     return default
 
 
-def _as_int(value, default, what="Wert"):
+def _as_int(value, default, what="Value"):
     """
     Eine Zahl aus einer Konfigurationszeile.
 
@@ -114,7 +114,7 @@ def _as_int(value, default, what="Wert"):
         return int(str(value).strip())
     except (TypeError, ValueError):
         _log().error(
-            "MQTT: %s ist keine Zahl (%r) - benutze %s stattdessen"
+            "MQTT: %s is not a number (%r) - using %s instead"
             % (what, value, default))
         return default
 
@@ -134,7 +134,7 @@ def _log():
 # Klein geschrieben, wie die uebrigen Parameter von CraftBeerPi 3
 # (unit, brewery_name, setup, port, altitude). Die frueheren
 # GROSSBUCHSTABEN (MQTT_SERVER, MQTT_TLS, ...) sind umgezogen - siehe
-# _config_lesen und die Migration update/5_mqtt_config.sql.
+# _read_config und die Migration update/5_mqtt_config.sql.
 
 CONFIG_SERVER = "mqtt_server"
 CONFIG_PORT = "mqtt_port"
@@ -146,12 +146,12 @@ CONFIG_CERT = "mqtt_cert"
 CONFIG_KEY = "mqtt_key"
 
 # TLS ist ein Auswahlfeld, kein Freitext.
-TLS_OPTIONEN = ["YES", "NO"]
+TLS_OPTIONS = ["YES", "NO"]
 
 # Die Namen, unter denen die Parameter bis zur Umbenennung in der
 # Datenbank standen. Beim Start wird der alte Wert uebernommen und der
 # alte Eintrag geloescht - die Konfiguration geht nicht verloren.
-_ALTE_NAMEN = {
+_OLD_NAMES = {
     CONFIG_SERVER: "MQTT_SERVER",
     CONFIG_PORT: "MQTT_PORT",
     CONFIG_USERNAME: "MQTT_USERNAME",
@@ -163,8 +163,8 @@ _ALTE_NAMEN = {
 }
 
 
-def _config_lesen(cbpi_instance, name, default, description,
-                   typ="text", optionen=None):
+def _read_config(cbpi_instance, name, default, description,
+                 param_type="text", options=None):
     """
     Einen Config-Parameter lesen und - falls es ihn noch nicht gibt - anlegen.
 
@@ -187,45 +187,45 @@ def _config_lesen(cbpi_instance, name, default, description,
         # Der Config-Cache ist noch nicht da - dann gibt es auch keine
         # Parameter, die man lesen koennte. Der Aufrufer bekommt den
         # Vorgabewert, das Backend laeuft weiter.
-        _log().error("MQTT: Config-Cache ist nicht initialisiert - die "
-                     "MQTT-Parameter konnten nicht gelesen werden")
+        _log().error("MQTT: Config cache is not initialized - the "
+                     "MQTT parameters could not be read")
         return default
 
-    eintrag = cache.get(name)
-    alter_name = _ALTE_NAMEN.get(name)
-    alter_eintrag = cache.get(alter_name) if alter_name else None
+    entry = cache.get(name)
+    old_name = _OLD_NAMES.get(name)
+    old_entry = cache.get(old_name) if old_name else None
 
-    if eintrag is not None:
+    if entry is not None:
         # Fall 2: der Parameter gibt es schon.
         # Ein NULL in der Datenbank ist kein Wert - dann gilt der
         # Vorgabewert, sonst waere der Broker nicht erreichbar.
-        wert = eintrag.value if eintrag.value is not None else default
-        _typ_setzen(cbpi_instance, name, typ, optionen)
+        value = entry.value if entry.value is not None else default
+        _set_type(cbpi_instance, name, param_type, options)
     else:
         # Fall 1 oder 3: den Wert des alten Parameters uebernehmen,
         # sonst den Vorgabewert.
-        if alter_eintrag is not None and alter_eintrag.value is not None:
-            wert = alter_eintrag.value
+        if old_entry is not None and old_entry.value is not None:
+            value = old_entry.value
         else:
-            wert = default
+            value = default
         try:
-            cbpi_instance.add_config_parameter(name, wert, typ, description,
-                                               options=optionen)
+            cbpi_instance.add_config_parameter(name, value, param_type,
+                                               description, options=options)
         except Exception as e:
             # Ein Parameter, der sich nicht anlegen laesst, darf den
             # Start des Backends nicht verhindern.
-            _log().error("MQTT: Config-Parameter %s konnte nicht angelegt "
-                         "werden: %s" % (name, e))
+            _log().error("MQTT: Config parameter %s could not be created: %s"
+                         % (name, e))
 
-    if alter_name:
+    if old_name:
         # Der alte Eintrag stoert nur - die Oberflaeche zeigte beide
         # Namen an, und der Brauer haette nicht gewusst, welcher gilt.
-        _parameter_loeschen(cbpi_instance, alter_name)
+        _delete_parameter(cbpi_instance, old_name)
 
-    return wert
+    return value
 
 
-def _typ_setzen(cbpi_instance, name, typ, optionen=None):
+def _set_type(cbpi_instance, name, param_type, options=None):
     """
     Den Typ eines Config-Parameters anpassen, falls er nicht passt.
 
@@ -238,25 +238,25 @@ def _typ_setzen(cbpi_instance, name, typ, optionen=None):
     from modules.config import Config
 
     cache = cbpi_instance.cache.get("config") or {}
-    eintrag = cache.get(name)
-    if eintrag is None:
+    entry = cache.get(name)
+    if entry is None:
         return
 
-    if eintrag.type == typ and (eintrag.options or []) == (optionen or []):
+    if entry.type == param_type and (entry.options or []) == (options or []):
         return
 
     try:
         with cbpi_instance.app.app_context():
-            eintrag.__dict__.update({"type": typ, "options": optionen})
-            Config.update(**eintrag.__dict__)
-        _log().info("MQTT: Config-Parameter %s hat jetzt den Typ '%s'"
-                    % (name, typ))
+            entry.__dict__.update({"type": param_type, "options": options})
+            Config.update(**entry.__dict__)
+        _log().info("MQTT: Config parameter %s now has the type '%s'"
+                    % (name, param_type))
     except Exception as e:
-        _log().error("MQTT: Typ des Config-Parameters %s konnte nicht "
-                     "geaendert werden: %s" % (name, e))
+        _log().error("MQTT: Type of config parameter %s could not be "
+                     "changed: %s" % (name, e))
 
 
-def _parameter_loeschen(cbpi_instance, name):
+def _delete_parameter(cbpi_instance, name):
     """
     Einen Config-Parameter aus der Datenbank und aus dem Cache entfernen.
 
@@ -272,14 +272,13 @@ def _parameter_loeschen(cbpi_instance, name):
         with cbpi_instance.app.app_context():
             Config.delete(name)
         cache.pop(name, None)
-        _log().info("MQTT: Der alte Config-Parameter %s wurde entfernt"
-                    % name)
+        _log().info("MQTT: The old config parameter %s was removed" % name)
     except Exception as e:
-        _log().error("MQTT: Der alte Config-Parameter %s konnte nicht "
-                     "entfernt werden: %s" % (name, e))
+        _log().error("MQTT: The old config parameter %s could not be "
+                     "removed: %s" % (name, e))
 
 
-def _tls_lesen(cbpi_instance):
+def _read_tls(cbpi_instance):
     """
     Den TLS-Parameter lesen und auf YES/NO bringen.
 
@@ -288,21 +287,20 @@ def _tls_lesen(cbpi_instance):
     steht, zeigt gar nichts an - der Brauer wuerde nicht sehen, ob TLS
     an ist. Der alte Wert wird deshalb umgestellt und zurueckgeschrieben.
     """
-    roh = _config_lesen(cbpi_instance, CONFIG_TLS, "NO", "MQTT TLS",
-                        "select", TLS_OPTIONEN)
-    neu = "YES" if _as_bool(roh) else "NO"
+    raw = _read_config(cbpi_instance, CONFIG_TLS, "NO", "MQTT TLS",
+                       "select", TLS_OPTIONS)
+    new = "YES" if _as_bool(raw) else "NO"
 
-    if str(roh).strip().upper() != neu:
+    if str(raw).strip().upper() != new:
         try:
             with cbpi_instance.app.app_context():
-                cbpi_instance.set_config_parameter(CONFIG_TLS, neu)
-            _log().info("MQTT: TLS-Parameter von '%s' auf '%s' umgestellt"
-                        % (roh, neu))
+                cbpi_instance.set_config_parameter(CONFIG_TLS, new)
+            _log().info("MQTT: TLS parameter switched from '%s' to '%s'"
+                        % (raw, new))
         except Exception as e:
-            _log().error("MQTT: TLS-Parameter konnte nicht gespeichert "
-                         "werden: %s" % e)
+            _log().error("MQTT: TLS parameter could not be saved: %s" % e)
 
-    return neu
+    return new
 
 
 class MQTTBroker:
@@ -319,14 +317,14 @@ class MQTTBroker:
         # Die Portzahl kann aus der Datenbank kommen, also aus einem
         # Textfeld. Ein "abc" oder " 1883" darf den Start nicht killen -
         # siehe die Fehlerbehandlung in initMQTT.
-        self.port = _as_int(port, 1883, "MQTT Port")
+        self.port = _as_int(port, 1883, "MQTT port")
         self.username = username
         self.password = password
         self.tls = _as_bool(tls)
         self.ca_cert = ca_cert
         self.cert = cert
         self.key = key
-        self.keepalive = _as_int(keepalive, 60, "MQTT Keepalive")
+        self.keepalive = _as_int(keepalive, 60, "MQTT keepalive")
 
         self._lock = threading.RLock()
         self._connected = threading.Event()
@@ -387,12 +385,12 @@ class MQTTBroker:
         ``connect()`` in einem eigenen Thread aufgerufen und ist bei jedem
         Broker-Neustart dauerhaft gescheitert.
         """
-        _log().info("MQTT: verbinde mit %s:%s" % (self.server, self.port))
+        _log().info("MQTT: connecting to %s:%s" % (self.server, self.port))
         try:
             self._client.connect_async(self.server, self.port, self.keepalive)
             self._client.loop_start()
         except Exception as e:
-            _log().error("MQTT: Verbindungsaufbau fehlgeschlagen: %s" % e)
+            _log().error("MQTT: Connection setup failed: %s" % e)
             return False
         return True
 
@@ -401,7 +399,7 @@ class MQTTBroker:
             self._client.disconnect()
             self._client.loop_stop()
         except Exception as e:
-            _log().error("MQTT: Fehler beim Beenden: %s" % e)
+            _log().error("MQTT: Error while shutting down: %s" % e)
         finally:
             self._connected.clear()
 
@@ -453,12 +451,12 @@ class MQTTBroker:
         try:
             func(*args)
         except Exception as e:
-            _log().error("MQTT: Fehler in %s: %s" % (func.__name__, e))
+            _log().error("MQTT: Error in %s: %s" % (func.__name__, e))
 
     def _handle_connect(self, rc):
         if rc != 0:
             self._connected.clear()
-            _log().error("MQTT: Verbindung abgelehnt (Code %s)" % rc)
+            _log().error("MQTT: Connection rejected (code %s)" % rc)
             return
 
         # Snapshot und connected-Flag unter derselben Sperre setzen. Sonst
@@ -468,7 +466,7 @@ class MQTTBroker:
             topics = list(self._topics.keys())
             self._connected.set()
 
-        _log().info("MQTT: verbunden, %d Topic(s) werden abonniert" % len(topics))
+        _log().info("MQTT: connected, %d topic(s) will be subscribed" % len(topics))
 
         # Alle registrierten Topics erneut abonnieren. Nach einem Reconnect
         # sind die Abos des Brokers verloren, das war ein stiller Datenverlust.
@@ -478,7 +476,7 @@ class MQTTBroker:
     def _handle_disconnect(self, rc):
         self._connected.clear()
         if rc != 0:
-            _log().warning("MQTT: Verbindung unterbrochen (Code %s), Reconnect läuft" % rc)
+            _log().warning("MQTT: Connection interrupted (code %s), reconnect running" % rc)
 
     def is_connected(self):
         return self._connected.is_set()
@@ -511,24 +509,24 @@ class MQTTBroker:
         hat. Blockiert hoechstens ``timeout`` Sekunden auf die Verbindung.
         """
         if not topic:
-            _log().error("MQTT: publish ohne Topic - verwende die Actor-Konfiguration")
+            _log().error("MQTT: publish without topic - using the actor configuration")
             return False
 
         if not self._connected.is_set():
             # Vorher: AttributeError, weil client noch None war.
             if not self.wait_connected(timeout):
-                _log().error("MQTT: kein Broker (%s:%s), publish auf '%s' verworfen"
+                _log().error("MQTT: no broker (%s:%s), publish to '%s' discarded"
                              % (self.server, self.port, topic))
                 return False
 
         try:
             info = self._client.publish(topic, payload, qos=qos, retain=retain)
         except Exception as e:
-            _log().error("MQTT: publish auf '%s' fehlgeschlagen: %s" % (topic, e))
+            _log().error("MQTT: publish to '%s' failed: %s" % (topic, e))
             return False
 
         if info.rc != mqtt.MQTT_ERR_SUCCESS:
-            _log().error("MQTT: publish auf '%s' nicht moeglich (rc=%s)"
+            _log().error("MQTT: publish to '%s' not possible (rc=%s)"
                          % (topic, info.rc))
             return False
         return True
@@ -539,7 +537,7 @@ class MQTTBroker:
         Verbindungsaufbau aufgerufen werden.
         """
         if not topic:
-            _log().error("MQTT: Sensor ohne Topic - Subscription uebersprungen")
+            _log().error("MQTT: Sensor without topic - subscription skipped")
             return False
 
         with self._lock:
@@ -570,14 +568,14 @@ class MQTTBroker:
             try:
                 self._client.unsubscribe(topic)
             except Exception as e:
-                _log().error("MQTT: unsubscribe von '%s' fehlgeschlagen: %s" % (topic, e))
+                _log().error("MQTT: unsubscribe from '%s' failed: %s" % (topic, e))
         return True
 
     def _subscribe_now(self, topic):
         try:
             self._client.subscribe(topic, qos=1)
         except Exception as e:
-            _log().error("MQTT: subscribe auf '%s' fehlgeschlagen: %s" % (topic, e))
+            _log().error("MQTT: subscribe to '%s' failed: %s" % (topic, e))
 
     # ------------------------------------------------------------------
     # Weiterleitung an die Sensoren
@@ -603,7 +601,7 @@ class MQTTBroker:
             try:
                 callback(client, userdata, msg)
             except Exception as e:
-                _log().error("MQTT: Fehler im Callback fuer '%s': %s"
+                _log().error("MQTT: Error in callback for '%s': %s"
                              % (msg.topic, e))
 
 
@@ -645,7 +643,7 @@ class MQTT_SENSOR(SensorActive):
     a_topic = Property.Text("Topic", configurable=True, default_value="",
                             description="MQTT TOPIC")
     b_payload = Property.Text("Payload Dictionary", configurable=True, default_value="",
-                              description="Wo der Wert im Payload steht, leer lassen fuer Rohwert")
+                              description="Where the value is located in the payload, leave empty for raw value")
     c_unit = Property.Text("Unit", configurable=True, default_value="",
                            description="Units to display")
 
@@ -673,8 +671,8 @@ class MQTT_SENSOR(SensorActive):
 
         self._on_message = on_message
         self.broker.add_subscription(self.topic, on_message)
-        _log().info("MQTT: Sensor %s lauscht auf '%s' (Pfad: %s)"
-                    % (self.name, self.topic, self.payload_text or "Rohwert"))
+        _log().info("MQTT: Sensor %s listens on '%s' (path: %s)"
+                    % (self.name, self.topic, self.payload_text or "raw value"))
 
     def get_value(self):
         return {"value": self.last_value, "unit": self.unit}
@@ -686,7 +684,7 @@ class MQTT_SENSOR(SensorActive):
         try:
             self.api.cache["mqtt"].remove_subscription(self.topic, self._on_message)
         except Exception as e:
-            _log().error("MQTT: Sensor %s konnte nicht abgemeldet werden: %s"
+            _log().error("MQTT: Sensor %s could not be unsubscribed: %s"
                          % (self.name, e))
         SensorActive.stop(self)
 
@@ -728,13 +726,13 @@ def _handle_message(sensor_id, payload_path, payload):
         try:
             q.put_nowait({"id": sensor_id, "value": data})
         except queue.Full:
-            _log().warning("MQTT: Eingangsqueue voll, Wert fuer Sensor %s verworfen" % sensor_id)
+            _log().warning("MQTT: Input queue full, value for sensor %s discarded" % sensor_id)
     else:
-        _log().debug("MQTT: Payload fuer Sensor %s ist kein skalarer Wert (%s)"
+        _log().debug("MQTT: Payload for sensor %s is not a scalar value (%s)"
                      % (sensor_id, type(data).__name__))
 
 
-class _BrokerAus(object):
+class _broker_out(object):
     """
     Ersatz fuer den Broker, wenn er sich nicht starten laesst.
 
@@ -750,23 +748,23 @@ class _BrokerAus(object):
     """
 
     def __init__(self, ca_cert="", cert="", key=""):
-        self._gemeldet = False
+        self._reported = False
         self._topics = {}
         self._lock = threading.RLock()
         self.ca_cert = ca_cert
         self.cert = cert
         self.key = key
 
-    def _melde(self, was):
-        if self._gemeldet:
+    def _report(self, what):
+        if self._reported:
             return
-        self._gemeldet = True
+        self._reported = True
         _log().error(
-            "MQTT: %s nicht moeglich - der Broker laeuft nicht. Die "
-            "MQTT-Konfiguration pruefen." % was)
+            "MQTT: %s not possible - the broker is not running. "
+            "Check the MQTT configuration." % what)
 
     def publish(self, topic, payload, qos=2, retain=True, timeout=10):
-        self._melde("publish")
+        self._report("publish")
         return False
 
     def is_connected(self):
@@ -806,21 +804,21 @@ def initMQTT(cbpi_instance):
     (siehe CraftBeerPi.run_init).
     """
 
-    server = _config_lesen(cbpi_instance, CONFIG_SERVER, "localhost",
+    server = _read_config(cbpi_instance, CONFIG_SERVER, "localhost",
                            "MQTT Server")
-    port = _config_lesen(cbpi_instance, CONFIG_PORT, "1883",
+    port = _read_config(cbpi_instance, CONFIG_PORT, "1883",
                          "MQTT Server Port", "number")
-    username = _config_lesen(cbpi_instance, CONFIG_USERNAME, "",
-                              "MQTT username")
-    password = _config_lesen(cbpi_instance, CONFIG_PASSWORD, "",
-                              "MQTT password")
-    tls = _tls_lesen(cbpi_instance)
-    ca_cert = _config_lesen(cbpi_instance, CONFIG_CA_CERT, "",
-                            "MQTT TLS CA Zertifikat (Pfad)")
-    cert = _config_lesen(cbpi_instance, CONFIG_CERT, "",
-                         "MQTT TLS Client Zertifikat (Pfad)")
-    key = _config_lesen(cbpi_instance, CONFIG_KEY, "",
-                        "MQTT TLS Client Key (Pfad)")
+    username = _read_config(cbpi_instance, CONFIG_USERNAME, "",
+                             "MQTT username")
+    password = _read_config(cbpi_instance, CONFIG_PASSWORD, "",
+                             "MQTT password")
+    tls = _read_tls(cbpi_instance)
+    ca_cert = _read_config(cbpi_instance, CONFIG_CA_CERT, "",
+                            "MQTT TLS CA certificate (path)")
+    cert = _read_config(cbpi_instance, CONFIG_CERT, "",
+                         "MQTT TLS client certificate (path)")
+    key = _read_config(cbpi_instance, CONFIG_KEY, "",
+                        "MQTT TLS client key (path)")
 
     # Der Broker darf den Start des Backends nicht verhindern.
     #
@@ -842,15 +840,15 @@ def initMQTT(cbpi_instance):
         cbpi_instance.cache["mqtt"] = broker
     except Exception as e:
         _log().error(
-            "MQTT: Broker konnte nicht gestartet werden (%s: %s) - das "
-            "Backend laeuft ohne MQTT weiter. Die Konfiguration der "
-            "MQTT-Parameter pruefen."
+            "MQTT: Broker could not be started (%s: %s) - the "
+            "backend continues without MQTT. Check the configuration of "
+            "the MQTT parameters."
             % (type(e).__name__, e))
         try:
             cbpi_instance.notify(
                 "MQTT",
-                "Der MQTT-Broker konnte nicht gestartet werden: %s. "
-                "Das Backend laeuft ohne MQTT weiter." % e,
+                "The MQTT broker could not be started: %s. "
+                "The backend continues without MQTT." % e,
                 type="danger",
                 timeout=None,
             )
@@ -860,7 +858,7 @@ def initMQTT(cbpi_instance):
         # Der Cache-Eintrag fehlt damit. Die Actoren und Sensoren
         # greifen darauf zu - sie bekommen einen Broker, der nichts
         # tut, statt einer staendigen Fehlermeldung beim Schalten.
-        cbpi_instance.cache["mqtt"] = _BrokerAus(ca_cert, cert, key)
+        cbpi_instance.cache["mqtt"] = _broker_out(ca_cert, cert, key)
 
     def mqtt_reader(api):
         """
@@ -881,7 +879,7 @@ def initMQTT(cbpi_instance):
                     continue
                 sensor = api.cache.get("sensors").get(sensor_id)
                 if sensor is None:
-                    _log().debug("MQTT: Sensor %s nicht (mehr) vorhanden, Wert verworfen"
+                    _log().debug("MQTT: Sensor %s no longer exists, value discarded"
                                  % sensor_id)
                     continue
                 if sensor.instance is not None:
@@ -890,7 +888,7 @@ def initMQTT(cbpi_instance):
             except Exception as e:
                 # Vorher: blankes except. Auch ein KeyError auf der
                 # Sensor-Id blieb dadurch unentdeckt.
-                _log().error("MQTT: Reader konnte Wert nicht verarbeiten: %s" % e)
+                _log().error("MQTT: Reader could not process value: %s" % e)
 
     cbpi_instance.socketio.start_background_task(target=mqtt_reader, api=cbpi_instance)
-    _log().info("MQTT: Plugin initialisiert")
+    _log().info("MQTT: Plugin initialized")

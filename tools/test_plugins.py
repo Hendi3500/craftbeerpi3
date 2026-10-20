@@ -47,33 +47,33 @@ def run():
     client = app.test_client()
 
     print("--- Namensvalidierung ------------------------------------------")
-    for boese in ("../../logs", "../../../tmp", "..", ".", "/etc",
-                  "a/b", "a\\b", "", "x" * 300):
-        pfad = endpoints._plugin_pfad(boese)
-        check("Name %-18r wird abgelehnt" % boese, pfad is None,
-              "-> %r" % pfad)
+    for bad in ("../../logs", "../../../tmp", "..", ".", "/etc",
+                "a/b", "a\\b", "", "x" * 300):
+        path = endpoints._plugin_path(bad)
+        check("Name %-18r wird abgelehnt" % bad, path is None,
+              "-> %r" % path)
 
     print("\n--- Erlaubte Namen --------------------------------------------")
-    for gut in ("MQTTPlugin", "mein_plugin", "plugin-1", "Plugin2"):
-        pfad = endpoints._plugin_pfad(gut)
-        check("Name %-18r wird akzeptiert" % gut, pfad is not None,
-              "-> %r" % pfad)
+    for good in ("MQTTPlugin", "mein_plugin", "plugin-1", "Plugin2"):
+        path = endpoints._plugin_path(good)
+        check("Name %-18r wird akzeptiert" % good, path is not None,
+              "-> %r" % path)
 
     print("\n--- Traversal ueber HTTP --------------------------------------")
     # Ueber HTTP greift zuerst das Routing: Werkzeug normalisiert ".."
     # im Pfad, der Request passt auf keine Route und es kommt ein 404.
     # Die View bekommt den Namen also gar nicht erst zu sehen.
     #
-    # Der eigentliche Schutz sitzt in _plugin_pfad() - der wird unten
+    # Der eigentliche Schutz sitzt in _plugin_path() - der wird unten
     # direkt an der View geprueft, weil dort ein Request-Client nicht
     # dazwischenkommt.
-    for methode, pfad, was in (
+    for method, path, what in (
             ("delete", "/api/editor/../../logs", "DELETE"),
             ("put", "/api/editor/../../logs", "PUT"),
             ("post", "/api/editor/../../logs", "POST"),
             ("get", "/api/editor/../../logs", "GET")):
-        r = getattr(client, methode)(pfad, data=b"x")
-        check("%s mit Traversal wird nicht ausgefuehrt (%s)" % (was, r.status_code),
+        r = getattr(client, method)(path, data=b"x")
+        check("%s mit Traversal wird nicht ausgefuehrt (%s)" % (what, r.status_code),
               r.status_code in (400, 404), "Status %s" % r.status_code)
 
     if os.path.isdir(os.path.join(ROOT, "logs")):
@@ -105,17 +105,17 @@ def run():
     print("\n--- __pycache__ taucht nicht als Plugin auf --------------------")
     r = client.get("/api/editor/")
     try:
-        liste = json.loads(r.data)
+        listing = json.loads(r.data)
     except Exception:
-        liste = None
-    check("GET /api/editor/ liefert eine Liste", isinstance(liste, list),
+        listing = None
+    check("GET /api/editor/ liefert eine Liste", isinstance(listing, list),
           repr(r.data)[:80])
-    if isinstance(liste, list):
-        check("__pycache__ ist nicht in der Liste", "__pycache__" not in liste,
-              str(liste))
+    if isinstance(listing, list):
+        check("__pycache__ ist nicht in der Liste", "__pycache__" not in listing,
+              str(listing))
         check("nur echte Verzeichnisse in der Liste",
               all(os.path.isdir(os.path.join(endpoints.PLUGIN_DIR, n))
-                  for n in liste), str(liste))
+                  for n in listing), str(listing))
 
     print("\n--- Modul-Register --------------------------------------------")
     check("__pycache__ nicht im Modul-Register",

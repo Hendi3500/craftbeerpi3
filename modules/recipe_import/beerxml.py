@@ -36,7 +36,7 @@ class BeerXMLImport(FlaskView):
                 file = request.files['file']
                 if file and self.allowed_file(file.filename):
                     file.save(os.path.join(self.api.app.config['UPLOAD_FOLDER'], "beer.xml"))
-                    self.api.notify(headline="Upload Successful", message="The Beer XML file was uploaded succesfully")
+                    self.api.notify(headline="Upload Successful", message="The Beer XML file was uploaded successfully")
                     return ('', 204)
                 return ('', 404)
         except Exception as e:
@@ -94,7 +94,7 @@ class BeerXMLImport(FlaskView):
             self.api.emit("UPDATE_ALL_STEPS", Step.get_all())
             self.api.notify(headline="Recipe %s loaded successfully" % name, message="")
         except Exception as e:
-            self.api.notify(headline="Failed to load Recipe", message=e.message, type="danger")
+            self.api.notify(headline="Failed to load Recipe", message=str(e), type="danger")
             return ('', 500)
 
         return ('', 204)

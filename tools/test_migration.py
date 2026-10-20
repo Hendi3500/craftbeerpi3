@@ -43,58 +43,58 @@ def check(name, condition, detail=""):
         print("         -> %s" % detail)
 
 
-def _kopiere(ziel):
+def _copy(target):
     """Projekt in ein frisches Verzeichnis kopieren."""
-    for eintrag in ("modules", "config", "update", "logs"):
-        quelle = os.path.join(ROOT, eintrag)
-        if os.path.isdir(quelle):
-            shutil.copytree(quelle, os.path.join(ziel, eintrag),
+    for entry in ("modules", "config", "update", "logs"):
+        source = os.path.join(ROOT, entry)
+        if os.path.isdir(source):
+            shutil.copytree(source, os.path.join(target, entry),
                             ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-    os.makedirs(os.path.join(ziel, "upload"), exist_ok=True)
-    shutil.copy(os.path.join(ROOT, "run.py"), os.path.join(ziel, "run.py"))
+    os.makedirs(os.path.join(target, "upload"), exist_ok=True)
+    shutil.copy(os.path.join(ROOT, "run.py"), os.path.join(target, "run.py"))
     shutil.copy(os.path.join(ROOT, "requirements.txt"),
-                os.path.join(ziel, "requirements.txt"))
+                os.path.join(target, "requirements.txt"))
 
 
-def _starte(verzeichnis):
+def _start(directory):
     """Die App einmal starten (Import genuegt - run_init laeuft beim Import)."""
     env = dict(os.environ)
-    env["PYTHONPATH"] = verzeichnis
+    env["PYTHONPATH"] = directory
     proc = subprocess.run(
         [sys.executable, "-c", "import modules"],
-        cwd=verzeichnis, env=env, capture_output=True, timeout=120)
+        cwd=directory, env=env, capture_output=True, timeout=120)
     return proc
 
 
-def _db(verzeichnis):
+def _db(directory):
     import sqlite3
-    return sqlite3.connect(os.path.join(verzeichnis, "craftbeerpi.db"))
+    return sqlite3.connect(os.path.join(directory, "craftbeerpi.db"))
 
 
 def run():
     tmp = tempfile.mkdtemp(prefix="cbpi-migration-")
     print("Testverzeichnis: %s" % tmp)
     try:
-        _kopiere(tmp)
+        _copy(tmp)
 
         print("\n--- Erste Installation (leere Datenbank) -------------------")
-        proc = _starte(tmp)
+        proc = _start(tmp)
         check("Start laeuft durch", proc.returncode == 0,
               proc.stderr.decode(errors="replace")[-300:])
-        ausgabe = proc.stdout.decode(errors="replace")
-        check("keine Migrationsfehler auf stdout", "EXCEPT" not in ausgabe,
-              ausgabe[-200:])
+        output = proc.stdout.decode(errors="replace")
+        check("keine Migrationsfehler auf stdout", "EXCEPT" not in output,
+              output[-200:])
 
         # Die erwarteten Versionen aus dem update/-Verzeichnis ableiten.
         # Fest verdrahtete Zahlen brechen bei jeder neuen Migration.
-        erwartet = sorted(int(f.split("_")[0]) for f in os.listdir(
+        expected = sorted(int(f.split("_")[0]) for f in os.listdir(
             os.path.join(tmp, "update")) if f.endswith(".sql"))
 
         db = _db(tmp)
-        versionen = [r[0] for r in db.execute(
+        versions = [r[0] for r in db.execute(
             "SELECT version FROM schema_info ORDER BY id")]
-        check("schema_info hat die erwartete Version", versionen == erwartet,
-              "%s, erwartet %s" % (versionen, erwartet))
+        check("schema_info hat die erwartete Version", versions == expected,
+              "%s, erwartet %s" % (versions, expected))
 
         # Die Zeilen aus den Migrationen muessen da sein
         port = db.execute("SELECT value FROM config WHERE name='port'").fetchone()
@@ -108,53 +108,53 @@ def run():
               buzzer is not None and "27" in str(buzzer[0]), repr(buzzer))
 
         # Reihenfolge in schema_info muss der Versionsnummer entsprechen
-        paare = db.execute(
+        pairs = db.execute(
             "SELECT version, filename FROM schema_info ORDER BY id").fetchall()
         check("Migrationen in Versionsreihenfolge ausgefuehrt",
-              [p[0] for p in paare] == sorted(p[0] for p in paare),
-              str(paare))
+              [p[0] for p in pairs] == sorted(p[0] for p in pairs),
+              str(pairs))
         db.close()
 
         print("\n--- Zweiter Start (Datenbank ist aktuell) -------------------")
-        proc = _starte(tmp)
-        ausgabe = proc.stdout.decode(errors="replace")
-        check("keine Migrationsfehler auf stdout", "EXCEPT" not in ausgabe,
-              ausgabe[-200:])
+        proc = _start(tmp)
+        output = proc.stdout.decode(errors="replace")
+        check("keine Migrationsfehler auf stdout", "EXCEPT" not in output,
+              output[-200:])
         db = _db(tmp)
-        anzahl = db.execute("SELECT COUNT(*) FROM schema_info").fetchone()[0]
-        check("keine Migration doppelt ausgefuehrt", anzahl == len(erwartet),
-              "%d Eintraege, erwartet %d" % (anzahl, len(erwartet)))
+        count = db.execute("SELECT COUNT(*) FROM schema_info").fetchone()[0]
+        check("keine Migration doppelt ausgefuehrt", count == len(expected),
+              "%d Eintraege, erwartet %d" % (count, len(expected)))
         db.close()
 
         print("\n--- Neue Migration (Upgrade) ------------------------------")
         # Die naechste freie Version nehmen. Eine Datei mit einer bereits
         # vergebenen Version wird uebersprungen - die Versionsnummer ist
         # der Schluessel, nicht nur ein Ordnungsmerkmal.
-        neue_version = max(erwartet) + 1
+        new_version = max(expected) + 1
         with open(os.path.join(tmp, "update",
-                               "%d_test_upgrade.sql" % neue_version), "w") as f:
+                               "%d_test_upgrade.sql" % new_version), "w") as f:
             f.write("INSERT OR IGNORE INTO config VALUES "
-                    "('test_migration_%d', 'ja', 'text', 'Test', NULL );\n" % neue_version)
-        proc = _starte(tmp)
+                    "('test_migration_%d', 'ja', 'text', 'Test', NULL );\n" % new_version)
+        proc = _start(tmp)
         db = _db(tmp)
-        neu = db.execute("SELECT value FROM config WHERE name='test_migration_%d'"
-                         % neue_version).fetchone()
-        check("neue Migration wurde ausgefuehrt", neu is not None, repr(neu))
-        anzahl = db.execute("SELECT COUNT(*) FROM schema_info").fetchone()[0]
-        check("nur die neue Migration kam dazu", anzahl == len(erwartet) + 1,
-              "%d Eintraege, erwartet %d" % (anzahl, len(erwartet) + 1))
+        new = db.execute("SELECT value FROM config WHERE name='test_migration_%d'"
+                         % new_version).fetchone()
+        check("neue Migration wurde ausgefuehrt", new is not None, repr(new))
+        count = db.execute("SELECT COUNT(*) FROM schema_info").fetchone()[0]
+        check("nur die neue Migration kam dazu", count == len(expected) + 1,
+              "%d Eintraege, erwartet %d" % (count, len(expected) + 1))
         db.close()
 
         print("\n--- Fehler landen im Log -----------------------------------")
         # Eine kaputte Migration schreiben - wieder mit einer freien Version,
         # sonst wird sie uebersprungen, statt zu scheitern.
-        kaputt_version = max(erwartet) + 2
-        kaputt_name = "%d_kaputt.sql" % kaputt_version
-        with open(os.path.join(tmp, "update", kaputt_name), "w") as f:
+        broken_version = max(expected) + 2
+        broken_name = "%d_kaputt.sql" % broken_version
+        with open(os.path.join(tmp, "update", broken_name), "w") as f:
             f.write("THIS IS NOT VALID SQL;\n")
-        proc = _starte(tmp)
+        proc = _start(tmp)
         log = open(os.path.join(tmp, "logs", "app.log")).read()
-        check("Migrationsfehler steht im Log", ("Migration %s" % kaputt_name) in log,
+        check("Migrationsfehler steht im Log", ("Migration %s" % broken_name) in log,
               log[-300:])
         check("Migrationsfehler steht nicht auf stdout",
               "EXCEPT" not in proc.stdout.decode(errors="replace"))

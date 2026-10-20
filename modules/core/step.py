@@ -53,7 +53,7 @@ class KettleAPI(NotificationAPI):
                 self.api.emit_event("SET_TARGET_TEMP", id=id, temp=temp)
         except Exception as e:
 
-            self.notify("Faild to set Target Temp", "", type="warning")
+            self.notify("Failed to set Target Temp", "", type="warning")
 
 class Timer(object):
     timer_end = Property.Number("TIMER_END", configurable=False)

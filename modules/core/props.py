@@ -40,9 +40,9 @@ def apply_property_defaults(instance, provided=None):
     if provided is None:
         provided = {}
 
-    for klasse in type(instance).__mro__:
-        for name, wert in vars(klasse).items():
-            if not isinstance(wert, PropertyType):
+    for klass in type(instance).__mro__:
+        for name, value in vars(klass).items():
+            if not isinstance(value, PropertyType):
                 continue
             if name in instance.__dict__:
                 # Die Konfiguration hat den Wert geliefert - der steht
@@ -56,14 +56,14 @@ def apply_property_defaults(instance, provided=None):
                     pass
                 continue
 
-            vorgabe = getattr(wert, "default_value", None)
+            default = getattr(value, "default_value", None)
 
-            if vorgabe is None and isinstance(wert, Property.Select) \
-                    and getattr(wert, "options", None):
-                vorgabe = wert.options[0]
+            if default is None and isinstance(value, Property.Select) \
+                    and getattr(value, "options", None):
+                default = value.options[0]
 
             try:
-                setattr(instance, name, vorgabe)
+                setattr(instance, name, default)
             except Exception:
                 # Ein Attribut, das sich nicht setzen laesst, darf den
                 # Start des Controllers nicht verhindern.

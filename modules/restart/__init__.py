@@ -203,7 +203,7 @@ def _status():
     }
 
 
-def _sockets_unererbbar_machen():
+def _make_sockets_non_inheritable():
     """
     Die Sockets dieses Prozesses unererbbar machen.
 
@@ -228,29 +228,29 @@ def _sockets_unererbbar_machen():
 
     :return: Die Anzahl der umgestellten Deskriptoren.
     """
-    geaendert = 0
+    changed = 0
 
     try:
-        pfad = "/proc/self/fd"
-        for name in os.listdir(pfad):
+        path = "/proc/self/fd"
+        for name in os.listdir(path):
             try:
                 fd = int(name)
-                if not os.readlink(os.path.join(pfad, name)).startswith("socket:"):
+                if not os.readlink(os.path.join(path, name)).startswith("socket:"):
                     continue
                 if not os.get_inheritable(fd):
                     continue
                 os.set_inheritable(fd, False)
-                geaendert += 1
+                changed += 1
             except (OSError, ValueError):
                 # Der Deskriptor kann zwischen dem Listing und dem
                 # Zugriff verschwunden sein - dann ist er aber auch
                 # nicht mehr zu erben.
                 continue
     except Exception as e:
-        logger.warning("BackendRestart: Sockets konnten nicht unererbbar "
-                       "gemacht werden: %s" % e)
+        logger.warning("BackendRestart: Sockets could not be made "
+                       "non-inheritable: %s" % e)
 
-    return geaendert
+    return changed
 
 
 def _execute(delay):
@@ -301,16 +301,16 @@ def _execute(delay):
         # Der Listening-Socket darf nicht in das neue Prozessbild
         # geerbt werden - sonst kann der neue Server den Port nicht
         # binden und das Backend steht nicht mehr. Siehe
-        # _sockets_unererbbar_machen().
-        anzahl = _sockets_unererbbar_machen()
-        logger.info("BackendRestart: %d Socket(s) unererbbar gemacht" % anzahl)
+        # _make_sockets_non_inheritable().
+        count = _make_sockets_non_inheritable()
+        logger.info("BackendRestart: %d socket(s) made non-inheritable" % count)
 
         # Ab hier kehrt nichts zurueck. Die PID bleibt gleich, damit die
         # PID-Datei des Init-Skripts gueltig bleibt.
         os.execv(interpreter, [interpreter, run_script])
     except Exception as e:
         _pending = None
-        logger.error("BackendRestart: Neustart fehlgeschlagen (%s)" % e)
+        logger.error("BackendRestart: Restart failed (%s)" % e)
         cbpi.notify(
             "Backend",
             "Restart failed: %s" % e,
@@ -355,7 +355,7 @@ def _read_changes():
     try:
         entries = json.loads(raw)
     except (TypeError, ValueError):
-        logger.warning("BackendRestart: %s ist nicht lesbar, fange neu an" % CONFIG_CHANGED)
+        logger.warning("BackendRestart: %s is not readable, starting over" % CONFIG_CHANGED)
         return []
 
     if not isinstance(entries, list):
@@ -389,9 +389,9 @@ def _record_change(name):
         entries.sort(key=lambda e: e.get("at", 0))
         _write_changes(entries[-CHANGES_LIMIT:])
 
-        logger.info("BackendRestart: Plugin %s geaendert, ein Neustart ist faellig" % name)
+        logger.info("BackendRestart: Plugin %s changed, a restart is due" % name)
     except Exception as e:
-        logger.error("BackendRestart: Aenderung von %s konnte nicht notiert werden (%s)" % (name, e))
+        logger.error("BackendRestart: Change of %s could not be recorded (%s)" % (name, e))
 
 
 def _clear_changes():
@@ -408,7 +408,7 @@ def _clear_changes():
     except Exception as e:
         # Nicht fatal: die Liste bleibt stehen, und die UI bietet einen
         # Neustart an, der nichts mehr zu tun hat - falsch, aber harmlos.
-        logger.error("BackendRestart: Aenderungsliste konnte nicht geleert werden (%s)" % e)
+        logger.error("BackendRestart: Change list could not be cleared (%s)" % e)
 
 
 def _note_change(response):
@@ -500,7 +500,7 @@ def restart():
     if _run_script() is None or not sys.executable:
         # Nichts, wohin neu zu starten. Lieber jetzt laut scheitern als ein
         # stilles No-Op hinter einem 202.
-        logger.error("BackendRestart: run.py oder Interpreter nicht gefunden")
+        logger.error("BackendRestart: run.py or interpreter not found")
         return flask_json.dumps({
             "pending": False,
             "message": "BackendRestart cannot find run.py. Not restarting.",
@@ -508,7 +508,7 @@ def restart():
 
     _pending = {"at": time.time(), "delay": delay}
 
-    logger.info("BackendRestart: Neustart in %ss eingeplant" % delay)
+    logger.info("BackendRestart: Restart scheduled in %ss" % delay)
     cbpi.notify(
         "Backend",
         "CraftBeerPi is restarting, back in a few seconds",
@@ -534,7 +534,7 @@ def init(cbpi):
     initialisiertes Backend neu starten wuerde.
     """
     cbpi.app.register_blueprint(blueprint, url_prefix='/api')
-    logger.info("BackendRestart: POST /api/restart ist verfuegbar")
+    logger.info("BackendRestart: POST /api/restart is available")
 
 
 @cbpi.initalizer(order=1)
@@ -549,12 +549,12 @@ def init_parameters(cbpi):
     """
     try:
         if not _ensure_parameters():
-            logger.warning("BackendRestart: Config-Cache nicht bereit, keine Aenderungserfassung")
+            logger.warning("BackendRestart: Config cache not ready, no change tracking")
             return
 
         cbpi.set_config_parameter(CONFIG_STARTED, repr(time.time()))
     except Exception as e:
-        logger.error("BackendRestart: Aenderungserfassung nicht eingerichtet (%s)" % e)
+        logger.error("BackendRestart: Change tracking not set up (%s)" % e)
 
 
 @cbpi.initalizer(order=1)
@@ -566,4 +566,4 @@ def init_tracking(cbpi):
     genau einmal da ist und nachdem das App-Objekt existiert.
     """
     cbpi.app.after_request(_note_change)
-    logger.info("BackendRestart: Plugin-Aenderungen werden erfasst")
+    logger.info("BackendRestart: Plugin changes are being tracked")

@@ -5,14 +5,14 @@ from modules import cbpi
 from modules.core.hardware import ActorBase, SensorPassive, SensorActive
 from modules.core.props import Property
 
-from modules.core.gpio import GPIO, GPIO_VERFUEGBAR
+from modules.core.gpio import GPIO, GPIO_AVAILABLE
 
-if GPIO_VERFUEGBAR:
+if GPIO_AVAILABLE:
     GPIO.setmode(GPIO.BCM)
 else:
     cbpi.app.logger.warning(
-        "GPIO-Aktoren nicht verfuegbar: kein Zugriff auf die GPIO-Schnittstelle. "
-        "Auf dem Raspberry Pi 'pip install rpi-lgpio' ausfuehren.")
+        "GPIO actors not available: no access to the GPIO interface. "
+        "On the Raspberry Pi run 'pip install rpi-lgpio'.")
 
 
 

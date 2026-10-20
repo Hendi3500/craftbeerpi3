@@ -115,7 +115,7 @@ class ChilStep(StepBase):
 
     timer = Property.Number("Timer in Minutes", configurable=True, default_value=0, description="Timer is started immediately")
 
-    @cbpi.action("Stat Timer")
+    @cbpi.action("Start Timer")
     def start(self):
         if self.is_timer_finished() is None:
             self.start_timer(int(self.timer) * 60)
@@ -137,10 +137,10 @@ class ChilStep(StepBase):
 @cbpi.step
 class PumpStep(StepBase):
 
-    pump = StepProperty.Actor("Pump", description="Pump actor gets toogled")
+    pump = StepProperty.Actor("Pump", description="Pump actor gets toggled")
     timer = Property.Number("Timer in Minutes", configurable=True, default_value=0, description="Timer is started immediately")
 
-    @cbpi.action("Stat Timer")
+    @cbpi.action("Start Timer")
     def start(self):
         if self.is_timer_finished() is None:
             self.start_timer(int(self.timer) * 60)
@@ -171,7 +171,7 @@ class BoilStep(StepBase):
     temp = Property.Number("Temperature", configurable=True, default_value=100, description="Target temperature for boiling")
     kettle = StepProperty.Kettle("Kettle", description="Kettle in which the boiling step takes place")
     timer = Property.Number("Timer in Minutes", configurable=True, default_value=90, description="Timer is started when target temperature is reached")
-    hop_1 = Property.Number("Hop 1 Addition", configurable=True, description="Fist Hop alert")
+    hop_1 = Property.Number("Hop 1 Addition", configurable=True, description="First hop alert")
     hop_1_added = Property.Number("",default_value=None)
     hop_2 = Property.Number("Hop 2 Addition", configurable=True, description="Second Hop alert")
     hop_2_added = Property.Number("", default_value=None)

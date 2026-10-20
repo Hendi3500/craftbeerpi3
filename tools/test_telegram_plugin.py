@@ -39,16 +39,16 @@ def check(name, condition, detail=""):
         print("         -> %s" % detail)
 
 
-class FakeAntwort(object):
+class FakeResponse(object):
     """So sieht eine Antwort von Telegram aus - nur das Nötigste."""
 
-    def __init__(self, status_code=200, text='{"ok":true}', daten=None):
+    def __init__(self, status_code=200, text='{"ok":true}', data=None):
         self.status_code = status_code
         self.text = text
-        self._daten = daten or {}
+        self._data = data or {}
 
     def json(self):
-        return self._daten
+        return self._data
 
 
 def run():
@@ -56,7 +56,7 @@ def run():
     from modules.plugins import TelegramPushNotifications as telegram
 
     print("--- Der Text wird escaped --------------------------------------")
-    text = telegram._formatiere({
+    text = telegram._format_message({
         "headline": "Hop Alert",
         "message": "Heater < 50 % & rising > 20",
     })
@@ -67,23 +67,23 @@ def run():
     check("die Formatierung bleibt erhalten", text.startswith("<b>Hop Alert</b>"),
           repr(text))
 
-    text2 = telegram._formatiere({"headline": "Nur eine Ueberschrift", "message": ""})
+    text2 = telegram._format_message({"headline": "Nur eine Ueberschrift", "message": ""})
     check("eine Meldung ohne Text wird nicht kaputt", "<b>" in text2, repr(text2))
 
-    text3 = telegram._formatiere({"headline": None, "message": None})
+    text3 = telegram._format_message({"headline": None, "message": None})
     check("eine leere Meldung ergibt leeren Text", text3 == "", repr(text3))
 
     print("\n--- Der Token kommt nicht ins Log ----------------------------")
     token = "123456:ABC-DEF"
-    maskiert = telegram._ohne_token(
+    masked = telegram._without_token(
         "Max retries exceeded with url: /bot123456:ABC-DEF/sendMessage", token)
-    check("der Token wird maskiert", token not in maskiert, repr(maskiert))
-    check("der Rest des Textes bleibt lesbar", "Max retries exceeded" in maskiert,
-          repr(maskiert))
+    check("der Token wird maskiert", token not in masked, repr(masked))
+    check("der Rest des Textes bleibt lesbar", "Max retries exceeded" in masked,
+          repr(masked))
 
     print("\n--- Die Konfiguration wird bei jeder Nachricht gelesen ------")
     # Zwei Config-Parameter anlegen und den Cache fuellen.
-    telegram._parameter_anlegen()
+    telegram._create_parameters()
     cache = cbpi.cache.get("config") or {}
     check("der Token-Parameter existiert", telegram.PARAM_TOKEN in cache,
           repr(sorted(cache.keys())))
@@ -91,72 +91,72 @@ def run():
     check("der Parameter fuer die Startnachricht existiert",
           telegram.PARAM_STARTUP in cache)
 
-    gespeichert = {}
+    stored = {}
 
-    def _hole(name, default=None):
-        return gespeichert.get(name, default)
+    def _get(name, default=None):
+        return stored.get(name, default)
 
     original_get = cbpi.get_config_parameter
-    cbpi.get_config_parameter = _hole
+    cbpi.get_config_parameter = _get
     try:
-        gespeichert[telegram.PARAM_TOKEN] = "  123456:ABC  "
-        gespeichert[telegram.PARAM_CHAT] = "111, 222 ,"
-        tok, chats = telegram._einstellungen()
+        stored[telegram.PARAM_TOKEN] = "  123456:ABC  "
+        stored[telegram.PARAM_CHAT] = "111, 222 ,"
+        tok, chats = telegram._settings()
         check("der Token wird getrimmt", tok == "123456:ABC", repr(tok))
         check("mehrere Chat-IDs werden gelesen", chats == ["111", "222"], repr(chats))
 
         # Und die Aenderung wirkt sofort - ohne Neustart.
-        gespeichert[telegram.PARAM_CHAT] = "333"
-        tok2, chats2 = telegram._einstellungen()
+        stored[telegram.PARAM_CHAT] = "333"
+        tok2, chats2 = telegram._settings()
         check("eine geaenderte Chat-ID wirkt sofort", chats2 == ["333"], repr(chats2))
     finally:
         cbpi.get_config_parameter = original_get
 
     print("\n--- Senden und Fehlerbehandlung ------------------------------")
-    gesendet = []
+    sent = []
 
     def fake_post(url, data=None, timeout=None):
-        gesendet.append((url, data, timeout))
-        return FakeAntwort(200)
+        sent.append((url, data, timeout))
+        return FakeResponse(200)
 
     original_post = telegram.requests.post
     telegram.requests.post = fake_post
     try:
-        ok = telegram._sende("123456:ABC", "111", "<b>Test</b>")
+        ok = telegram._send("123456:ABC", "111", "<b>Test</b>")
         check("eine gueltige Nachricht wird angenommen", ok is True)
         check("die Nachricht geht an den richtigen Chat",
-              gesendet and gesendet[0][1].get("chat_id") == "111", repr(gesendet))
-        check("die Nachricht hat ein Timeout", gesendet and gesendet[0][2] == telegram.TIMEOUT)
-        check("der Token steht in der URL", gesendet and "123456:ABC" in gesendet[0][0])
+              sent and sent[0][1].get("chat_id") == "111", repr(sent))
+        check("die Nachricht hat ein Timeout", sent and sent[0][2] == telegram.TIMEOUT)
+        check("der Token steht in der URL", sent and "123456:ABC" in sent[0][0])
 
         # Der Ton: Telegram kennt den Schalter disable_notification.
         check("mit Ton wird der Ton nicht abgeschaltet",
-              gesendet[0][1].get("disable_notification") == "false", repr(gesendet))
+              sent[0][1].get("disable_notification") == "false", repr(sent))
 
-        gesendet.clear()
-        telegram._sende("123456:ABC", "111", "<b>Test</b>", mit_ton=False)
+        sent.clear()
+        telegram._send("123456:ABC", "111", "<b>Test</b>", with_sound=False)
         check("ohne Ton wird der Ton abgeschaltet",
-              gesendet and gesendet[0][1].get("disable_notification") == "true",
-              repr(gesendet))
+              sent and sent[0][1].get("disable_notification") == "true",
+              repr(sent))
 
-        gesendet.clear()
+        sent.clear()
 
         def fake_post_429(url, data=None, timeout=None):
-            gesendet.append((url, data, timeout))
-            return FakeAntwort(429, '{"ok":false,"error_code":429}',
+            sent.append((url, data, timeout))
+            return FakeResponse(429, '{"ok":false,"error_code":429}',
                                {"ok": False, "error_code": 429,
                                 "parameters": {"retry_after": 3}})
 
         telegram.requests.post = fake_post_429
-        ok = telegram._sende("123456:ABC", "111", "<b>Test</b>")
+        ok = telegram._send("123456:ABC", "111", "<b>Test</b>")
         check("bei 429 wird es noch einmal versucht", ok is False)
-        check("bei 429 wird zweimal gesendet", len(gesendet) == 2, repr(len(gesendet)))
+        check("bei 429 wird zweimal gesendet", len(sent) == 2, repr(len(sent)))
 
         def fake_post_500(url, data=None, timeout=None):
-            return FakeAntwort(500, '{"ok":false,"description":"Internal Server Error"}')
+            return FakeResponse(500, '{"ok":false,"description":"Internal Server Error"}')
 
         telegram.requests.post = fake_post_500
-        ok = telegram._sende("123456:ABC", "111", "<b>Test</b>")
+        ok = telegram._send("123456:ABC", "111", "<b>Test</b>")
         check("ein Serverfehler wird als Fehler gemeldet", ok is False)
 
         def fake_post_boom(url, data=None, timeout=None):
@@ -164,17 +164,17 @@ def run():
                 "Max retries exceeded with url: /bot123456:ABC/sendMessage")
 
         telegram.requests.post = fake_post_boom
-        ok = telegram._sende("123456:ABC", "111", "<b>Test</b>")
+        ok = telegram._send("123456:ABC", "111", "<b>Test</b>")
         check("ein Netzwerkfehler wirft nicht", ok is False)
     finally:
         telegram.requests.post = original_post
 
     print("\n--- Ohne Konfiguration wird nichts gesendet ------------------")
-    aufrufe = []
+    calls = []
 
     def fake_post2(url, data=None, timeout=None):
-        aufrufe.append(url)
-        return FakeAntwort(200)
+        calls.append(url)
+        return FakeResponse(200)
 
     original_post = telegram.requests.post
     original_get = cbpi.get_config_parameter
@@ -182,20 +182,20 @@ def run():
     telegram.requests.post = fake_post2
     try:
         telegram.message_event({"headline": "Test", "message": "Test"})
-        check("ohne Token wird nichts gesendet", len(aufrufe) == 0, repr(aufrufe))
+        check("ohne Token wird nichts gesendet", len(calls) == 0, repr(calls))
     finally:
         telegram.requests.post = original_post
         cbpi.get_config_parameter = original_get
 
     print("\n--- Der Ton haengt am Ablauf-Timer -----------------------")
     check("eine Meldung ohne Timer klingelt",
-          telegram._mit_ton({"headline": "H", "message": "M", "timeout": None}) is True)
+          telegram._with_sound({"headline": "H", "message": "M", "timeout": None}) is True)
     check("eine Meldung mit Timer klingelt nicht",
-          telegram._mit_ton({"headline": "H", "message": "M", "timeout": 5000}) is False)
+          telegram._with_sound({"headline": "H", "message": "M", "timeout": 5000}) is False)
     check("eine Meldung ohne Timeout-Angabe klingelt",
-          telegram._mit_ton({"headline": "H", "message": "M"}) is True)
+          telegram._with_sound({"headline": "H", "message": "M"}) is True)
 
-    gesendet.clear()
+    sent.clear()
     original_post = telegram.requests.post
     original_get = cbpi.get_config_parameter
     cbpi.get_config_parameter = lambda name, default=None: {
@@ -207,15 +207,15 @@ def run():
         telegram.message_event({"headline": "Fehler", "message": "Kessel kalt",
                                 "timeout": None})
         check("eine bleibende Meldung klingelt am Handy",
-              gesendet and gesendet[-1][1].get("disable_notification") == "false",
-              repr(gesendet))
+              sent and sent[-1][1].get("disable_notification") == "false",
+              repr(sent))
 
-        gesendet.clear()
+        sent.clear()
         telegram.message_event({"headline": "Schritt", "message": "Heizen",
                                 "timeout": 5000})
         check("eine Meldung mit Timer kommt ohne Ton",
-              gesendet and gesendet[-1][1].get("disable_notification") == "true",
-              repr(gesendet))
+              sent and sent[-1][1].get("disable_notification") == "true",
+              repr(sent))
     finally:
         telegram.requests.post = original_post
         cbpi.get_config_parameter = original_get

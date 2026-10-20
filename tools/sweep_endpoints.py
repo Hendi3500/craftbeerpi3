@@ -20,7 +20,7 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 # Endpunkte mit Seiteneffekt - die werden NICHT aufgerufen.
-VERBOTEN = (
+FORBIDDEN = (
     "/api/system/tags",       # git checkout!
     "/api/system/git",        # git pull
     "/api/system/doReboot",   # Neustart
@@ -35,7 +35,7 @@ VERBOTEN = (
 # behoben wurden (MIGRATION.md, "Vorbestehende Fehler, die der Test
 # aufgedeckt hat"). Es sind durchweg Methoden, die intern aufgerufen
 # werden und die flask_classy nur zufaellig als HTTP-Route exponiert.
-ERWARTETE_ABWEICHUNGEN = {
+EXPECTED_DEVIATIONS = {
     "/",                                        # Redirect auf /ui
     "/api/actor/toggleTimeJob/1/1",             # interne Hilfsmethode
     "/api/beerxml/",                            # 404, solange keine beer.xml da ist
@@ -59,38 +59,38 @@ ERWARTETE_ABWEICHUNGEN = {
 }
 
 
-def sammle_routen(app):
+def collect_routes(app):
     """Alle GET-Routen einsammeln, verbotene herausfiltern."""
-    ausgaben = []
+    results = []
     for r in app.url_map.iter_rules():
         if r.endpoint == "static":
             continue
         if "GET" not in (r.methods or set()):
             continue
         s = str(r)
-        if any(v in s for v in VERBOTEN):
+        if any(v in s for v in FORBIDDEN):
             continue
         for a in r.arguments:
-            for muster in ("<int:%s>", "<%s>", "<string:%s>", "<path:%s>"):
-                s = s.replace(muster % a, "1")
-        ausgaben.append(s)
-    return sorted(set(ausgaben))
+            for pattern in ("<int:%s>", "<%s>", "<string:%s>", "<path:%s>"):
+                s = s.replace(pattern % a, "1")
+        results.append(s)
+    return sorted(set(results))
 
 
 def main():
     from modules import app
 
     client = app.test_client()
-    routen = sammle_routen(app)
+    routes = collect_routes(app)
     print("Sweep ueber %d GET-Routen (ohne die %d verbotenen Muster)\n"
-          % (len(routen), len(VERBOTEN)))
+          % (len(routes), len(FORBIDDEN)))
 
-    fehler = []
-    erwartet = []
+    errors = []
+    expected = []
     ok = 0
-    for pfad in routen:
+    for path in routes:
         try:
-            r = client.get(pfad)
+            r = client.get(path)
             code = r.status_code
         except TypeError:
             # View ohne return-Aussage - im Original so vorhanden
@@ -99,23 +99,23 @@ def main():
             code = "%s: %s" % (type(e).__name__, e)
         if code == 200:
             ok += 1
-        elif pfad in ERWARTETE_ABWEICHUNGEN:
-            erwartet.append((pfad, code))
+        elif path in EXPECTED_DEVIATIONS:
+            expected.append((path, code))
         else:
-            fehler.append((pfad, code))
+            errors.append((path, code))
 
-    print("HTTP 200: %d von %d" % (ok, len(routen)))
-    if erwartet:
-        print("\nErwartete Abweichungen (%d) - im Original so vorhanden:" % len(erwartet))
-        for p, c in erwartet:
+    print("HTTP 200: %d von %d" % (ok, len(routes)))
+    if expected:
+        print("\nErwartete Abweichungen (%d) - im Original so vorhanden:" % len(expected))
+        for p, c in expected:
             print("  %-46s -> %s" % (p, c))
-    if fehler:
-        print("\nUNERWARTETE Abweichungen (%d):" % len(fehler))
-        for p, c in fehler:
+    if errors:
+        print("\nUNERWARTETE Abweichungen (%d):" % len(errors))
+        for p, c in errors:
             print("  %-46s -> %s" % (p, c))
     else:
         print("\nKeine unerwarteten Abweichungen.")
-    return 0 if not fehler else 1
+    return 0 if not errors else 1
 
 
 if __name__ == "__main__":

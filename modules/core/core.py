@@ -46,7 +46,7 @@ class ActorAPI(object):
             value.state = 0
             value.power = 100
         except Exception as e:
-            self.notify("Actor Error", "Failed to setup actor %s. Please check the configuraiton" % value.name,
+            self.notify("Actor Error", "Failed to setup actor %s. Please check the configuration" % value.name,
                         type="danger", timeout=None)
             # Die Ausnahme mitprotokollieren: ohne sie laesst sich nicht
             # unterscheiden, ob die Konfiguration falsch ist oder die
@@ -144,7 +144,7 @@ class SensorAPI(object):
 
         except Exception as e:
 
-            self.notify("Sensor Error", "Failed to setup Sensor %s. Please check the configuraiton" % value.name, type="danger", timeout=None)
+            self.notify("Sensor Error", "Failed to setup Sensor %s. Please check the configuration" % value.name, type="danger", timeout=None)
             self.app.logger.error("Initializing of Sensor %s failed" % id)
 
     def receive_sensor_value(self, id, value):
@@ -264,13 +264,13 @@ class CraftBeerPi(ActorAPI, SensorAPI):
         """
         from modules.config import Config
         with self.app.app_context():
-            eintrag = self.cache.get("config").get(name)
+            entry = self.cache.get("config").get(name)
 
-            if eintrag is None:
-                raise KeyError("Unbekannter Config-Parameter: %s" % name)
+            if entry is None:
+                raise KeyError("Unknown config parameter: %s" % name)
 
-            eintrag.__dict__.update({"name": name, "value": value})
-            c = Config.update(**eintrag.__dict__)
+            entry.__dict__.update({"name": name, "value": value})
+            c = Config.update(**entry.__dict__)
             self.emit("UPDATE_CONFIG", c)
 
 
@@ -523,7 +523,7 @@ class CraftBeerPi(ActorAPI, SensorAPI):
             value = self.cache.get("kettle").get(id)
             value["state"] = False
         except:
-            self.notify("Kettle Setup Faild", "Please check %s configuration" % value.name, type="danger", timeout=None)
+            self.notify("Kettle Setup Failed", "Please check %s configuration" % value.name, type="danger", timeout=None)
             self.app.logger.error("Initializing of Kettle %s failed" % id)
 
 
@@ -535,7 +535,7 @@ class CraftBeerPi(ActorAPI, SensorAPI):
         self.app.logger.info("Invoke Init")
         self.cache["init"] = sorted(self.cache["init"], key=lambda k: k['order'])
         for i in self.cache.get("init"):
-            self.app.logger.info("INITIALIZER - METHOD %s PAHT %s: " % (i.get("function").__name__, str(inspect.getmodule(i.get("function")).__file__) ))
+            self.app.logger.info("INITIALIZER - METHOD %s PATH %s: " % (i.get("function").__name__, str(inspect.getmodule(i.get("function")).__file__) ))
             i.get("function")(self)
 
 

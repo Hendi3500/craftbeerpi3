@@ -65,9 +65,9 @@ class myThread (threading.Thread):
                 # kann, ist ein Fehlerfall und kein Grund, alles zu
                 # verschlucken. Der Log ist bei jedem Zyklus laut, deshalb
                 # wird der Fehler nur einmal gemeldet.
-                if not getattr(self, "_gemeldet", False):
-                    self._gemeldet = True
-                    app.logger.error("1-Wire: Sensor %s nicht lesbar: %s"
+                if not getattr(self, "_reported", False):
+                    self._reported = True
+                    app.logger.error("1-Wire: Sensor %s not readable: %s"
                                      % (self.sensor_name, e))
 
             # time.sleep() statt socketio.sleep(): dieser Thread ist ein
@@ -115,9 +115,9 @@ class ONE_WIRE_SENSOR(SensorPassive):
         # Der Wert kann auch ein String sein (aus einem Formular), deshalb
         # wird nicht auf den Typ geprueft, sondern der Parse-Versuch als
         # Kriterium genommen.
-        wert = self.offset
+        value = self.offset
         try:
-            return float(wert)
+            return float(value)
         except (TypeError, ValueError):
             return 0.0
             

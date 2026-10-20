@@ -37,10 +37,10 @@ ROOT = os.path.dirname(HERE)
 PASS = []
 FAIL = []
 
-NEUE_NAMEN = ["mqtt_server", "mqtt_port", "mqtt_username", "mqtt_password",
+NEW_NAMES = ["mqtt_server", "mqtt_port", "mqtt_username", "mqtt_password",
               "mqtt_tls", "mqtt_ca_cert", "mqtt_cert", "mqtt_key"]
 
-ALTE_NAMEN = [n.upper() for n in NEUE_NAMEN]
+OLD_NAMES = [n.upper() for n in NEW_NAMES]
 
 
 def check(name, condition, detail=""):
@@ -50,194 +50,197 @@ def check(name, condition, detail=""):
         print("         -> %s" % detail)
 
 
-def _kopiere(ziel):
+def _copy(target):
     """Projekt in ein frisches Verzeichnis kopieren."""
-    for eintrag in ("modules", "config", "update", "logs"):
-        quelle = os.path.join(ROOT, eintrag)
-        if os.path.isdir(quelle):
-            shutil.copytree(quelle, os.path.join(ziel, eintrag),
+    for entry in ("modules", "config", "update", "logs"):
+        source = os.path.join(ROOT, entry)
+        if os.path.isdir(source):
+            shutil.copytree(source, os.path.join(target, entry),
                             ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-    os.makedirs(os.path.join(ziel, "upload"), exist_ok=True)
-    shutil.copy(os.path.join(ROOT, "run.py"), os.path.join(ziel, "run.py"))
+    os.makedirs(os.path.join(target, "upload"), exist_ok=True)
+    shutil.copy(os.path.join(ROOT, "run.py"), os.path.join(target, "run.py"))
     shutil.copy(os.path.join(ROOT, "requirements.txt"),
-                os.path.join(ziel, "requirements.txt"))
+                os.path.join(target, "requirements.txt"))
 
 
-def _starte(verzeichnis):
+def _start(directory):
     """Die App einmal starten (der Import reicht - run_init laeuft dabei)."""
     env = dict(os.environ)
-    env["PYTHONPATH"] = verzeichnis
+    env["PYTHONPATH"] = directory
     return subprocess.run([sys.executable, "-c", "import modules"],
-                          cwd=verzeichnis, env=env, capture_output=True,
+                          cwd=directory, env=env, capture_output=True,
                           timeout=180)
 
 
-def _db(verzeichnis):
-    return sqlite3.connect(os.path.join(verzeichnis, "craftbeerpi.db"))
+def _db(directory):
+    return sqlite3.connect(os.path.join(directory, "craftbeerpi.db"))
 
 
-def _zeilen(db):
+def _rows(db):
     return {r[0]: r for r in db.execute(
         "SELECT name, value, type, description, options FROM config")}
 
 
-def _mache_alt(db, tls_wert="false"):
+def _make_old(db, tls_value="false"):
     """
     Die Datenbank in den Zustand einer alten Installation zuruecksetzen:
     GROSSBUCHSTABEN, TLS als Textfeld.
     """
-    for neu, alt in zip(NEUE_NAMEN, ALTE_NAMEN):
-        db.execute("UPDATE config SET name=? WHERE name=?", (alt, neu))
+    for new, old in zip(NEW_NAMES, OLD_NAMES):
+        db.execute("UPDATE config SET name=? WHERE name=?", (old, new))
     db.execute("UPDATE config SET value=?, type='text', options=NULL "
-               "WHERE name='MQTT_TLS'", (tls_wert,))
+               "WHERE name='MQTT_TLS'", (tls_value,))
     db.execute("UPDATE config SET value='192.168.0.140' WHERE name='MQTT_SERVER'")
     db.commit()
 
 
-def _pruefe_neu(db, label, server="192.168.0.140", tls="NO"):
-    zeilen = _zeilen(db)
+def _check_new(db, label, server="192.168.0.140", tls="NO"):
+    rows = _rows(db)
     check("%s: mqtt_server hat den alten Wert" % label,
-          zeilen.get("mqtt_server", (None, None))[1] == server,
-          repr(zeilen.get("mqtt_server")))
+          rows.get("mqtt_server", (None, None))[1] == server,
+          repr(rows.get("mqtt_server")))
     check("%s: mqtt_tls ist '%s'" % (label, tls),
-          zeilen.get("mqtt_tls", (None, None))[1] == tls,
-          repr(zeilen.get("mqtt_tls")))
+          rows.get("mqtt_tls", (None, None))[1] == tls,
+          repr(rows.get("mqtt_tls")))
     check("%s: mqtt_tls ist ein Auswahlfeld" % label,
-          zeilen.get("mqtt_tls", (None, None, None))[2] == "select",
-          repr(zeilen.get("mqtt_tls")))
-    optionen = zeilen.get("mqtt_tls", (None, None, None, None, None))[4]
+          rows.get("mqtt_tls", (None, None, None))[2] == "select",
+          repr(rows.get("mqtt_tls")))
+    options = rows.get("mqtt_tls", (None, None, None, None, None))[4]
     try:
-        optionen = json.loads(optionen) if optionen else None
+        options = json.loads(options) if options else None
     except (TypeError, ValueError):
         pass
     check("%s: mqtt_tls hat die Optionen YES/NO" % label,
-          optionen == ["YES", "NO"], repr(optionen))
+          options == ["YES", "NO"], repr(options))
     check("%s: mqtt_port ist ein Zahlenfeld" % label,
-          zeilen.get("mqtt_port", (None, None, None))[2] == "number",
-          repr(zeilen.get("mqtt_port")))
+          rows.get("mqtt_port", (None, None, None))[2] == "number",
+          repr(rows.get("mqtt_port")))
     check("%s: die alten GROSSBUCHSTABEN sind weg" % label,
-          not [n for n in ALTE_NAMEN if n in zeilen],
-          repr([n for n in ALTE_NAMEN if n in zeilen]))
+          not [n for n in OLD_NAMES if n in rows],
+          repr([n for n in OLD_NAMES if n in rows]))
     check("%s: alle kleingeschriebenen Parameter sind da" % label,
-          all(n in zeilen for n in NEUE_NAMEN),
-          repr([n for n in NEUE_NAMEN if n not in zeilen]))
+          all(n in rows for n in NEW_NAMES),
+          repr([n for n in NEW_NAMES if n not in rows]))
 
 
-def _fall_1():
+def _case_1():
     print("\n--- Upgrade mit Migration ------------------------------------")
     tmp = tempfile.mkdtemp(prefix="cbpi-mqtt-migration-")
     try:
-        _kopiere(tmp)
-        _starte(tmp)                      # frische Installation
+        _copy(tmp)
+        _start(tmp)                      # frische Installation
         db = _db(tmp)
-        _mache_alt(db)                    # Zustand einer alten Installation
+        _make_old(db)                    # Zustand einer alten Installation
         # Die Migration zurueckdrehen: schema_info steht wieder auf der
-        # Version vor der MQTT-Migration.
-        db.execute("DELETE FROM schema_info WHERE version=5")
+        # Version vor der MQTT-Migration. Der Kern merkt sich die
+        # hoechste vergebene Version - es muessen also alle Eintraege ab
+        # Version 5 weg, sonst wird die Migration als "bereits gelaufen"
+        # uebersprungen.
+        db.execute("DELETE FROM schema_info WHERE version>=5")
         db.commit()
         db.close()
 
-        proc = _starte(tmp)
+        proc = _start(tmp)
         check("Start laeuft durch", proc.returncode == 0,
               proc.stderr.decode(errors="replace")[-400:])
 
         db = _db(tmp)
-        _pruefe_neu(db, "Migration")
-        versionen = [r[0] for r in db.execute("SELECT version FROM schema_info")]
-        check("die MQTT-Migration ist verzeichnet", 5 in versionen,
-              repr(versionen))
+        _check_new(db, "Migration")
+        versions = [r[0] for r in db.execute("SELECT version FROM schema_info")]
+        check("die MQTT-Migration ist verzeichnet", 5 in versions,
+              repr(versions))
         db.close()
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-def _fall_2():
+def _case_2():
     print("\n--- Upgrade ohne Migration (Plugin uebernimmt selbst) --------")
     tmp = tempfile.mkdtemp(prefix="cbpi-mqtt-plugin-")
     try:
-        _kopiere(tmp)
-        _starte(tmp)
+        _copy(tmp)
+        _start(tmp)
         db = _db(tmp)
-        _mache_alt(db)
+        _make_old(db)
         # schema_info bleibt auf der neuen Version - die SQL-Migration
         # laeuft nicht. Das Plugin muss die Werte selbst mitnehmen.
         db.commit()
         db.close()
 
-        proc = _starte(tmp)
+        proc = _start(tmp)
         check("Start laeuft durch", proc.returncode == 0,
               proc.stderr.decode(errors="replace")[-400:])
 
         db = _db(tmp)
-        _pruefe_neu(db, "Plugin")
+        _check_new(db, "Plugin")
         db.close()
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-def _fall_3():
+def _case_3():
     print("\n--- Frische Installation -------------------------------------")
     tmp = tempfile.mkdtemp(prefix="cbpi-mqtt-frisch-")
     try:
-        _kopiere(tmp)
-        proc = _starte(tmp)
+        _copy(tmp)
+        proc = _start(tmp)
         check("Start laeuft durch", proc.returncode == 0,
               proc.stderr.decode(errors="replace")[-400:])
 
         db = _db(tmp)
-        zeilen = _zeilen(db)
+        rows = _rows(db)
         check("mqtt_server ist localhost",
-              zeilen.get("mqtt_server", (None, None))[1] == "localhost",
-              repr(zeilen.get("mqtt_server")))
+              rows.get("mqtt_server", (None, None))[1] == "localhost",
+              repr(rows.get("mqtt_server")))
         check("mqtt_port ist 1883",
-              str(zeilen.get("mqtt_port", (None, None))[1]) == "1883",
-              repr(zeilen.get("mqtt_port")))
+              str(rows.get("mqtt_port", (None, None))[1]) == "1883",
+              repr(rows.get("mqtt_port")))
         check("mqtt_tls ist NO",
-              zeilen.get("mqtt_tls", (None, None))[1] == "NO",
-              repr(zeilen.get("mqtt_tls")))
+              rows.get("mqtt_tls", (None, None))[1] == "NO",
+              repr(rows.get("mqtt_tls")))
         check("mqtt_tls ist ein Auswahlfeld",
-              zeilen.get("mqtt_tls", (None, None, None))[2] == "select",
-              repr(zeilen.get("mqtt_tls")))
-        optionen = zeilen.get("mqtt_tls", (None, None, None, None, None))[4]
+              rows.get("mqtt_tls", (None, None, None))[2] == "select",
+              repr(rows.get("mqtt_tls")))
+        options = rows.get("mqtt_tls", (None, None, None, None, None))[4]
         try:
-            optionen = json.loads(optionen) if optionen else None
+            options = json.loads(options) if options else None
         except (TypeError, ValueError):
             pass
-        check("mqtt_tls hat die Optionen YES/NO", optionen == ["YES", "NO"],
-              repr(optionen))
+        check("mqtt_tls hat die Optionen YES/NO", options == ["YES", "NO"],
+              repr(options))
         check("keine GROSSBUCHSTABEN angelegt",
-              not [n for n in ALTE_NAMEN if n in zeilen],
-              repr([n for n in ALTE_NAMEN if n in zeilen]))
+              not [n for n in OLD_NAMES if n in rows],
+              repr([n for n in OLD_NAMES if n in rows]))
         db.close()
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-def _fall_4():
+def _case_4():
     print("\n--- Alter TLS-Wert 'true' wird zu YES -------------------------")
     tmp = tempfile.mkdtemp(prefix="cbpi-mqtt-tls-")
     try:
-        _kopiere(tmp)
-        _starte(tmp)
+        _copy(tmp)
+        _start(tmp)
         db = _db(tmp)
-        _mache_alt(db, tls_wert="true")
+        _make_old(db, tls_value="true")
         db.execute("DELETE FROM schema_info WHERE version=5")
         db.commit()
         db.close()
 
-        _starte(tmp)
+        _start(tmp)
         db = _db(tmp)
-        _pruefe_neu(db, "TLS", tls="YES")
+        _check_new(db, "TLS", tls="YES")
         db.close()
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
 def run():
-    _fall_1()
-    _fall_2()
-    _fall_3()
-    _fall_4()
+    _case_1()
+    _case_2()
+    _case_3()
+    _case_4()
     return len(PASS), len(FAIL)
 
 

@@ -78,7 +78,7 @@ maxoutput_description = "The maximum PWM output %"
 # ---------------------------------------------------------------------------
 # Helfer
 # ---------------------------------------------------------------------------
-def temperature_einheit():
+def temperature_unit():
     """
     Die eingestellte Temperatureinheit ("C" oder "F").
 
@@ -90,44 +90,44 @@ def temperature_einheit():
     bereits, sie wird in ``init_db()`` angelegt.
     """
     try:
-        einheit = cbpi.get_config_parameter("unit", None)
-        if einheit:
-            return einheit
+        unit = cbpi.get_config_parameter("unit", None)
+        if unit:
+            return unit
     except Exception:
         pass
 
     try:
         with cbpi.app.app_context():
             from modules.config import Config
-            eintrag = Config.get_one("unit")
-            if eintrag is not None and eintrag.value:
-                return eintrag.value
+            entry = Config.get_one("unit")
+            if entry is not None and entry.value:
+                return entry.value
     except Exception:
         pass
 
     return "C"
 
 
-def sensor_id(wert):
+def sensor_id(value):
     """
     Die Sensor-Id aus dem Property-Wert.
 
     Je nach Oberflaeche landet dort eine Zahl oder ein Ziffern-String -
     beides wird angenommen. Leer oder nicht-numerisch liefert None.
     """
-    if wert is None:
+    if value is None:
         return None
 
-    if isinstance(wert, bool):
+    if isinstance(value, bool):
         return None
 
-    if isinstance(wert, int):
-        return wert
+    if isinstance(value, int):
+        return value
 
-    if isinstance(wert, float):
-        return int(wert)
+    if isinstance(value, float):
+        return int(value)
 
-    text = str(wert).strip()
+    text = str(value).strip()
 
     if not text:
         return None
@@ -148,7 +148,7 @@ class CascadePID(KettleController):
     c_inner_ki = Property.Number("Inner loop integral term", True, 0.25, description=ki_description)
     d_inner_kd = Property.Number("Inner loop derivative term", True, 0.0, description=kd_description)
     e_inner_integrator_initial = Property.Number("Inner loop integrator initial value", True, 0.0)
-    if temperature_einheit() == "C":
+    if temperature_unit() == "C":
         f_maxset = Property.Number("Max inner loop target (°C)", True, 75, description=maxset_description)
     else:
         f_maxset = Property.Number("Max inner loop target (°F)", True, 168, description=maxset_description)
@@ -204,7 +204,7 @@ class CascadePID(KettleController):
             self.heater_on(0.0)
 
         # Initialize PID cascade
-        if temperature_einheit() == "C":
+        if temperature_unit() == "C":
             outer_pid = PID(outer_kp, outer_ki, outer_kd, 0.0, maxset, 1.0, outer_integrator_initial)
         else:
             outer_pid = PID(outer_kp, outer_ki, outer_kd, 32, maxset, 1.8, outer_integrator_initial)
@@ -323,7 +323,7 @@ class CascadeHysteresis(KettleController):
     ab_ki = Property.Number("Integral term", True, 2.0, description=ki_description)
     ac_kd = Property.Number("Derivative term", True, 1.0, description=kd_description)
     ad_integrator_initial = Property.Number("Integrator initial value", True, 0.0)
-    if temperature_einheit() == "C":
+    if temperature_unit() == "C":
         ae_maxset = Property.Number("Max hysteresis target (°C)", True, 75, description=maxset_description)
     else:
         ae_maxset = Property.Number("Max hysteresis target (°F)", True, 168, description=maxset_description)
@@ -385,7 +385,7 @@ class CascadeHysteresis(KettleController):
             raise ValueError("Hysteresis - Notification timeout must be positive")
         else:
             # Initialize outer PID
-            if temperature_einheit() == "C":
+            if temperature_unit() == "C":
                 outer_pid = PID(kp, ki, kd, 0.0, maxset, 1.0, integrator_initial)
             else:
                 outer_pid = PID(kp, ki, kd, 32, maxset, 1.8, integrator_initial)
@@ -608,11 +608,11 @@ class Hysteresis(object):
         # negativen Aktion (Kuehlen) galt damit auch der Fall "Istwert unter
         # Sollwert" als AN, und die Heizung waere anstatt aus geblieben.
         if self.positive:
-            soll_an = current <= target
+            should_on = current <= target
         else:
-            soll_an = current >= target
+            should_on = current >= target
 
-        if soll_an:
+        if should_on:
             if self.on:
                 if interval > self.on_max:
                     # Current ON time has exceeded ON time maximum

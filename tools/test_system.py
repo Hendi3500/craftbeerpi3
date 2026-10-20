@@ -48,17 +48,17 @@ def run():
     import time
     t0 = time.time()
     r = client.post("/api/system/reboot")
-    dauer = time.time() - t0
+    duration = time.time() - t0
     check("POST /api/system/reboot antwortet 204", r.status_code == 204,
           "Status %s" % r.status_code)
-    check("Antwort kommt sofort (< 2s)", dauer < 2.0, "%.2fs" % dauer)
+    check("Antwort kommt sofort (< 2s)", duration < 2.0, "%.2fs" % duration)
 
     t0 = time.time()
     r = client.post("/api/system/shutdown")
-    dauer = time.time() - t0
+    duration = time.time() - t0
     check("POST /api/system/shutdown antwortet 204", r.status_code == 204,
           "Status %s" % r.status_code)
-    check("Antwort kommt sofort (< 2s)", dauer < 2.0, "%.2fs" % dauer)
+    check("Antwort kommt sofort (< 2s)", duration < 2.0, "%.2fs" % duration)
 
     print("\n--- Tag-Checkout: Sicherheitsregeln ---------------------------")
     # Wir rufen die View direkt auf, statt ueber HTTP - so wird kein
@@ -67,8 +67,8 @@ def run():
     view.api = cbpi
 
     # 1. Unbekannter Tag
-    antwort = view.checkout_tag("gibt-es-nicht-12345")
-    status = antwort[1] if isinstance(antwort, tuple) and len(antwort) > 1 else None
+    response = view.checkout_tag("gibt-es-nicht-12345")
+    status = response[1] if isinstance(response, tuple) and len(response) > 1 else None
     check("Unbekannter Tag wird abgelehnt (404)", status == 404,
           "Status %s" % status)
 
@@ -79,28 +79,28 @@ def run():
     repo = Repo(ROOT)
     check("Testrepo ist erreichbar", repo.working_dir is not None)
 
-    zieldatei = os.path.join(ROOT, "tools", "routes_current.json")
-    with open(zieldatei, "rb") as fh:
+    target_file = os.path.join(ROOT, "tools", "routes_current.json")
+    with open(target_file, "rb") as fh:
         original = fh.read()
     try:
-        with open(zieldatei, "ab") as fh:
+        with open(target_file, "ab") as fh:
             fh.write(b"\n")
         # Referenz ist der Zustand NACH der eigenen Aenderung - der
         # Endpunkt darf daran nichts mehr aendern.
-        with open(zieldatei, "rb") as fh:
-            erwartet = fh.read()
+        with open(target_file, "rb") as fh:
+            expected = fh.read()
         check("Testbaum ist schmutzig", repo.is_dirty(untracked_files=False))
 
-        antwort = view.checkout_tag("3.0")
-        status = antwort[1] if isinstance(antwort, tuple) and len(antwort) > 1 else None
+        response = view.checkout_tag("3.0")
+        status = response[1] if isinstance(response, tuple) and len(response) > 1 else None
         check("Schmutziger Arbeitsbaum wird verweigert (409)", status == 409,
               "Status %s" % status)
         # Der Arbeitsbaum muss unveraendert sein - genau darum geht es.
-        with open(zieldatei, "rb") as fh:
-            check("Arbeitsbaum blieb unveraendert", fh.read() == erwartet,
+        with open(target_file, "rb") as fh:
+            check("Arbeitsbaum blieb unveraendert", fh.read() == expected,
                   "Aenderungen wurden verworfen")
     finally:
-        with open(zieldatei, "wb") as fh:
+        with open(target_file, "wb") as fh:
             fh.write(original)
 
     check("Arbeitsbaum nach dem Test wiederhergestellt",
@@ -121,10 +121,10 @@ def run():
         # Der aktuelle HEAD muss den Tag *enthalten*, sonst waere ein
         # Checkout verlustbehaftet. Fuer "3.0" (2019) ist das nicht der
         # Fall, solange der Port auf master liegt.
-        aelter = not repo.is_ancestor(branch.commit, repo.commit("3.0"))
-        if aelter:
-            antwort = view.checkout_tag("3.0")
-            status = antwort[1] if isinstance(antwort, tuple) and len(antwort) > 1 else None
+        older = not repo.is_ancestor(branch.commit, repo.commit("3.0"))
+        if older:
+            response = view.checkout_tag("3.0")
+            status = response[1] if isinstance(response, tuple) and len(response) > 1 else None
             check("Aelterer Tag wird bei sauberem Baum verweigert (409)",
                   status == 409, "Status %s" % status)
             # Der Branch muss unveraendert sein.
@@ -140,21 +140,21 @@ def run():
     # 1-Wire-Offset
     from modules.base_plugins.one_wire import ONE_WIRE_SENSOR
 
-    klasse = ONE_WIRE_SENSOR
-    inst = klasse(api=cbpi, id=1, name="t", sensor_name=None)
+    klass = ONE_WIRE_SENSOR
+    inst = klass(api=cbpi, id=1, name="t", sensor_name=None)
     # Ohne "offset" in der Konfiguration: muss 0 liefern, ohne Exception
-    wert = inst.offset_value()
-    check("1-Wire-Offset ohne Konfiguration ist 0", wert == 0.0, repr(wert))
+    value = inst.offset_value()
+    check("1-Wire-Offset ohne Konfiguration ist 0", value == 0.0, repr(value))
 
     # Mit einem String-Offset (aus einem Formular)
-    inst2 = klasse(api=cbpi, id=1, name="t", sensor_name=None, offset="1.5")
-    wert2 = inst2.offset_value()
-    check("1-Wire-Offset als String wird geparst", wert2 == 1.5, repr(wert2))
+    inst2 = klass(api=cbpi, id=1, name="t", sensor_name=None, offset="1.5")
+    value2 = inst2.offset_value()
+    check("1-Wire-Offset als String wird geparst", value2 == 1.5, repr(value2))
 
     # Mit einem Zahlen-Offset
-    inst3 = klasse(api=cbpi, id=1, name="t", sensor_name=None, offset=-2.5)
-    wert3 = inst3.offset_value()
-    check("1-Wire-Offset als Zahl bleibt erhalten", wert3 == -2.5, repr(wert3))
+    inst3 = klass(api=cbpi, id=1, name="t", sensor_name=None, offset=-2.5)
+    value3 = inst3.offset_value()
+    check("1-Wire-Offset als Zahl bleibt erhalten", value3 == -2.5, repr(value3))
 
     # GPIOPWM-Frequenz
     from modules.base_plugins.gpio_actor import GPIOPWM

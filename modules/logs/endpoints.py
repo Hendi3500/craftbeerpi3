@@ -47,7 +47,7 @@ class LogView(FlaskView):
         filename = "./logs/%s" % file
         if os.path.isfile(filename) == True:
             os.remove(filename)
-            cbpi.notify("log deleted succesfully", "")
+            cbpi.notify("Log deleted successfully", "")
         else:
             cbpi.notify("Failed to delete log", "", type="danger")
         return ('', 204)

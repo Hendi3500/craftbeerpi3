@@ -18,7 +18,7 @@ class SystemView(FlaskView):
 
     api = cbpi
 
-    def _schedule_power_action(self, befehl):
+    def _schedule_power_action(self, command):
         """
         Neustart bzw. Herunterfahren einplanen.
 
@@ -32,15 +32,15 @@ class SystemView(FlaskView):
         subprocess auf POSIX einProgramm namens "halt" im PATH und
         scheitert - "halt" ist ein systemctl-Unterbefehl, kein Programm.
         """
-        def ausfuehren():
+        def execute():
             time.sleep(5)
             from subprocess import call
             try:
-                call([befehl])
+                call([command])
             except Exception as e:
-                self.api.app.logger.error("%s fehlgeschlagen: %s" % (befehl, e))
+                self.api.app.logger.error("%s failed: %s" % (command, e))
 
-        self.api.socketio.start_background_task(target=ausfuehren)
+        self.api.socketio.start_background_task(target=execute)
 
     def doShutdown(self):
         self._schedule_power_action("halt")
@@ -125,34 +125,34 @@ class SystemView(FlaskView):
             o.fetch()
         except Exception as e:
             cbpi.app.logger.warning(
-                "Tags konnten nicht aktualisiert werden (%s) - es werden nur "
-                "die lokal bekannten Tags angeboten" % e)
+                "Tags could not be updated (%s) - only the locally known "
+                "tags are offered" % e)
 
         # 1. Nur existierende Tags zulassen
         try:
             tags = [t.name for t in repo.tags]
         except Exception as e:
-            cbpi.app.logger.error("Tags nicht lesbar: %s" % e)
-            return ('Tags nicht lesbar', 500)
+            cbpi.app.logger.error("Tags not readable: %s" % e)
+            return ('Tags not readable', 500)
 
         if name not in tags:
-            cbpi.app.logger.warning("Checkout abgelehnt: unbekannter Tag '%s'" % name)
+            cbpi.app.logger.warning("Checkout rejected: unknown tag '%s'" % name)
             return ('Unknown tag %s' % name, 404)
 
         # 2. Nicht ueber uncommittete Aenderungen hinwegkommen
         try:
-            schmutzig = repo.is_dirty(untracked_files=False)
+            dirty = repo.is_dirty(untracked_files=False)
         except Exception as e:
-            cbpi.app.logger.error("Arbeitsbaum nicht prüfbar: %s" % e)
-            return ('Arbeitsbaum nicht prüfbar', 500)
+            cbpi.app.logger.error("Working tree not checkable: %s" % e)
+            return ('Working tree not checkable', 500)
 
-        if schmutzig:
+        if dirty:
             cbpi.app.logger.warning(
-                "Checkout von '%s' verweigert: der Arbeitsbaum hat "
-                "uncommittete Änderungen", name)
-            cbpi.notify("Checkout verweigert",
-                        "Es gibt uncommittete Änderungen im Arbeitsverzeichnis. "
-                        "Bitte zuerst committen oder zurücksetzen.",
+                "Checkout of '%s' denied: the working tree has "
+                "uncommitted changes", name)
+            cbpi.notify("Checkout denied",
+                        "There are uncommitted changes in the working directory. "
+                        "Please commit or reset first.",
                         type="danger", timeout=None)
             return ('Working tree is dirty - commit or stash first', 409)
 
@@ -169,26 +169,26 @@ class SystemView(FlaskView):
             # Detached HEAD: der Zustand laesst sich keinem Branch zuordnen,
             # ein Checkout koennte ihn ins Nichts zerlegen.
             cbpi.app.logger.warning(
-                "Checkout von '%s' verweigert: HEAD ist losgeloest" % name)
+                "Checkout of '%s' denied: HEAD is detached" % name)
             return ('HEAD is detached - refusing to check out a tag', 409)
 
         try:
             # True, wenn HEAD ein Vorfahr des Tags ist - der Tag enthaelt
             # den aktuellen Stand also und der Checkout verliert nichts.
-            enthaelt_aktuellen_stand = repo.is_ancestor(branch.commit, repo.commit(name))
+            contains_current_state = repo.is_ancestor(branch.commit, repo.commit(name))
         except Exception as e:
-            cbpi.app.logger.error("Tag-Historie nicht prüfbar: %s" % e)
+            cbpi.app.logger.error("Tag history not checkable: %s" % e)
             return ('Tag history not checkable', 500)
 
-        if not enthaelt_aktuellen_stand:
+        if not contains_current_state:
             cbpi.app.logger.warning(
-                "Checkout von '%s' verweigert: der Tag enthaelt den aktuellen "
-                "Stand von '%s' nicht" % (name, branch.name))
-            cbpi.notify("Checkout verweigert",
-                        "Der Tag '%s' ist älter als der aktuelle Stand von "
-                        "'%s'. Ein Checkout dorthin würde die Commits "
-                        "zwischen dem Tag und dem aktuellen Stand aus dem "
-                        "Arbeitsbaum entfernen."
+                "Checkout of '%s' denied: the tag does not contain the current "
+                "state of '%s'" % (name, branch.name))
+            cbpi.notify("Checkout denied",
+                        "The tag '%s' is older than the current state of "
+                        "'%s'. A checkout there would remove the commits "
+                        "between the tag and the current state from the "
+                        "working tree."
                         % (name, branch.name),
                         type="danger", timeout=None)
             return ('Tag %s is older than %s - refusing' % (name, branch.name), 409)
@@ -198,10 +198,10 @@ class SystemView(FlaskView):
         try:
             repo.create_head('backup/pre-tag-checkout', branch.commit)
             cbpi.app.logger.info(
-                "Sicherung fuer Tag-Checkout angelegt: backup/pre-tag-checkout -> %s"
+                "Backup for tag checkout created: backup/pre-tag-checkout -> %s"
                 % branch.commit.hexsha[:8])
         except Exception as e:
-            cbpi.app.logger.error("Sicherungs-Branch nicht anlegbar: %s" % e)
+            cbpi.app.logger.error("Backup branch could not be created: %s" % e)
             return ('Could not create backup branch', 500)
 
         try:
@@ -211,8 +211,8 @@ class SystemView(FlaskView):
             g = Git('./')
             g.checkout(name)
         except Exception as e:
-            cbpi.app.logger.error("Checkout von '%s' fehlgeschlagen: %s" % (name, e))
-            cbpi.notify("Checkout fehlgeschlagen", str(e), type="danger", timeout=None)
+            cbpi.app.logger.error("Checkout of '%s' failed: %s" % (name, e))
+            cbpi.notify("Checkout failed", str(e), type="danger", timeout=None)
             return ('Checkout failed: %s' % e, 500)
 
         cbpi.notify("Checkout successful", "Please restart the system")

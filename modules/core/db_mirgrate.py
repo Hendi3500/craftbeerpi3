@@ -32,7 +32,7 @@ from modules import cbpi
 from modules.core.db import get_db
 
 
-def _version_von_dateiname(filename):
+def _version_from_filename(filename):
     """Versionsnummer aus einem Dateinamen wie '3_port_config.sql'."""
     try:
         return int(filename[:filename.index('_')])
@@ -40,30 +40,30 @@ def _version_von_dateiname(filename):
         return None
 
 
-def _dateien_sortieren():
+def _sort_files():
     """
     Die SQL-Dateien aus ./update nach Versionsnummer sortiert.
 
     Rueckgabe: Liste von (version, dateiname), nur fuer Dateien mit
     sauberer Versionsnummer.
     """
-    ergebnis = []
+    result = []
     if not os.path.isdir("./update"):
-        return ergebnis
+        return result
     for filename in os.listdir("./update"):
         if not filename.endswith(".sql"):
             continue
-        version = _version_von_dateiname(filename)
+        version = _version_from_filename(filename)
         if version is None:
             cbpi.app.logger.warning(
-                "Migration %s wird uebersprungen - der Dateiname muss mit "
-                "<version>_ beginnen", filename)
+                "Migration %s is skipped - the filename must start with "
+                "<version>_", filename)
             continue
-        ergebnis.append((version, filename))
+        result.append((version, filename))
     # Nach Version sortieren, bei gleicher Version nach Name - damit ist
     # die Reihenfolge unabhaengig vom Dateisystem.
-    ergebnis.sort(key=lambda paar: (paar[0], paar[1]))
-    return ergebnis
+    result.sort(key=lambda pair: (pair[0], pair[1]))
+    return result
 
 
 def execute_file(current_version, data, conn):
@@ -150,10 +150,10 @@ def init(app=None):
             # schema_info existiert noch nicht - frische Installation.
             current_version = None
         except Exception as e:
-            cbpi.app.logger.error("Schema-Version nicht lesbar: %s" % e)
+            cbpi.app.logger.error("Schema version not readable: %s" % e)
             current_version = None
 
-        for version, filename in _dateien_sortieren():
+        for version, filename in _sort_files():
             d = {"version": version, "file": filename}
             try:
                 # current_version darf nur bei einer tatsaechlich
@@ -165,8 +165,8 @@ def init(app=None):
             except sqlite3.OperationalError as err:
                 # Im Log statt auf stdout - ein Migrationsfehler darf nicht
                 # stillschweigend bleiben.
-                cbpi.app.logger.error("Migration %s fehlgeschlagen: %s"
+                cbpi.app.logger.error("Migration %s failed: %s"
                                        % (filename, err))
             except Exception as e:
-                cbpi.app.logger.error("Migration %s fehlgeschlagen: %s: %s"
+                cbpi.app.logger.error("Migration %s failed: %s: %s"
                                        % (filename, type(e).__name__, e))

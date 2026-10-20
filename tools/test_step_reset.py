@@ -79,23 +79,23 @@ def run():
                     kettle="1", temp=98.5,
                     managed_fields=["temp", "timer", "hop_1", "hop_2", "hop_3"])
     boil.start_timer(60 * 60)
-    fehler = None
+    error = None
     try:
         for num in range(1, 6):
             boil.check_hop_timer(num, getattr(boil, "hop_%s" % num))
     except Exception as e:
-        fehler = e
-    check("ein leerer Hop-Slot wirft keinen TypeError", fehler is None, repr(fehler))
+        error = e
+    check("ein leerer Hop-Slot wirft keinen TypeError", error is None, repr(error))
 
     print("\n--- Der Reset beendet auch das Heizen ------------------------")
     # Der Kessel 1 steht auf 69 Grad, weil der Schritt "Einmaischen" ihn
     # auf seine Temperatur gesetzt hat. Nach dem Reset muss der Kessel
     # wieder auf 0 stehen - sonst heizt er ohne laufenden Schritt weiter.
-    gesetzte = []
+    applied = []
     original_emit = cbpi.emit_event
 
-    def _fange_ab(name, **kwargs):
-        gesetzte.append((name, kwargs))
+    def _catch_error(name, **kwargs):
+        applied.append((name, kwargs))
         return original_emit(name, **kwargs)
 
     class FakeStep(object):
@@ -105,7 +105,7 @@ def run():
         def finish(self):
             pass
 
-    cbpi.emit_event = _fange_ab
+    cbpi.emit_event = _catch_error
     original_active = cbpi.cache.get("active_step")
     cbpi.cache["active_step"] = FakeStep()
     try:
@@ -114,12 +114,12 @@ def run():
         cbpi.emit_event = original_emit
         cbpi.cache["active_step"] = original_active
 
-    treffer = [k for (n, k) in gesetzte
+    matches = [k for (n, k) in applied
                if n == "SET_TARGET_TEMP" and k.get("temp") == 0]
     check("der Reset setzt die Zieltemperatur des Kessels auf 0",
-          len(treffer) == 1, repr(gesetzte))
+          len(matches) == 1, repr(applied))
     check("der Reset nennt den richtigen Kessel",
-          bool(treffer) and treffer[0].get("id") == 1, repr(treffer))
+          bool(matches) and matches[0].get("id") == 1, repr(matches))
 
     print("\n--- Der Socket bietet keinen Websocket-Upgrade an -----------")
     # Der Werkzeug-Server kann den Upgrade nicht bedienen (400). Der

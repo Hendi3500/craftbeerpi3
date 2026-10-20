@@ -47,8 +47,8 @@ class _StubPWM(object):
 
     def __init__(self, channel, frequency):
         raise RuntimeError(
-            "GPIO nicht verfuegbar (PWM). Auf dem Raspberry Pi wird das "
-            "Paket 'rpi-lgpio' benoetigt.")
+            "GPIO not available (PWM). On the Raspberry Pi the package "
+            "'rpi-lgpio' is required.")
 
     def start(self, dc):
         pass
@@ -86,62 +86,62 @@ class GPIOStub(object):
     VERSION = "stub"
 
     def __init__(self):
-        self._gemeldet = False
+        self._reported = False
 
-    def _melde(self, was):
-        if not self._gemeldet:
-            self._gemeldet = True
+    def _report(self, what):
+        if not self._reported:
+            self._reported = True
             _log.error(
-                "GPIO nicht verfuegbar: %s nicht ausfuehrbar. Auf dem "
-                "Raspberry Pi das Paket 'rpi-lgpio' installieren "
-                "(pip install rpi-lgpio).", was)
+                "GPIO not available: %s cannot be executed. On the "
+                "Raspberry Pi install the package 'rpi-lgpio' "
+                "(pip install rpi-lgpio).", what)
         raise RuntimeError(
-            "GPIO nicht verfuegbar (%s). Auf dem Raspberry Pi wird das Paket "
-            "'rpi-lgpio' benoetigt." % was)
+            "GPIO not available (%s). On the Raspberry Pi the package "
+            "'rpi-lgpio' is required." % what)
 
     def setmode(self, mode):
-        self._melde("setmode")
+        self._report("setmode")
 
     def getmode(self):
         return None
 
     def setup(self, channel, direction, pull_up_down=PUD_OFF, initial=None):
-        self._melde("setup")
+        self._report("setup")
 
     def output(self, channel, value):
-        self._melde("output")
+        self._report("output")
 
     def input(self, channel):
-        self._melde("input")
+        self._report("input")
 
     def cleanup(self, channel=None):
-        self._melde("cleanup")
+        self._report("cleanup")
 
     def add_event_detect(self, channel, edge, callback=None, bouncetime=None):
-        self._melde("add_event_detect")
+        self._report("add_event_detect")
 
     def remove_event_detect(self, channel, edge=None, callback=None):
-        self._melde("remove_event_detect")
+        self._report("remove_event_detect")
 
     def event_detected(self, channel):
-        self._melde("event_detected")
+        self._report("event_detected")
 
     def wait_for_edge(self, channel, edge, bouncetime=None, timeout=None):
-        self._melde("wait_for_edge")
+        self._report("wait_for_edge")
 
     def add_event_callback(self, channel, callback):
-        self._melde("add_event_callback")
+        self._report("add_event_callback")
 
     def setwarnings(self, state):
         pass
 
     def gpio_function(self, channel):
-        self._melde("gpio_function")
+        self._report("gpio_function")
 
     PWM = _StubPWM
 
 
-def _lade_gpio():
+def _load_gpio():
     """
     GPIO-Modul laden. Reihenfolge:
 
@@ -152,29 +152,29 @@ def _lade_gpio():
     """
     try:
         import RPi.GPIO as GPIO
-        _log.info("GPIO: RPi.GPIO verfuegbar (Version %s)",
+        _log.info("GPIO: RPi.GPIO available (version %s)",
                   getattr(GPIO, "VERSION", "?"))
         return GPIO
     except Exception as e:
-        _log.info("GPIO: RPi.GPIO nicht verfuegbar (%s)", e)
+        _log.info("GPIO: RPi.GPIO not available (%s)", e)
 
     try:
         import rpi.lgpio as GPIO
-        _log.info("GPIO: rpi.lgpio verfuegbar")
+        _log.info("GPIO: rpi.lgpio available")
         return GPIO
     except Exception as e:
-        _log.info("GPIO: rpi.lgpio nicht verfuegbar (%s)", e)
+        _log.info("GPIO: rpi.lgpio not available (%s)", e)
 
-    _log.warning("GPIO: kein Zugriff auf die GPIO-Schnittstelle. Aktoren vom "
-                 "Typ GPIOSimple/GPIOPWM/RelayBoard und der Buzzer "
-                 "funktionieren nicht. Auf dem Raspberry Pi loest "
-                 "'pip install rpi-lgpio' das Problem.")
+    _log.warning("GPIO: no access to the GPIO interface. Actors of type "
+                 "GPIOSimple/GPIOPWM/RelayBoard and the buzzer do not work. "
+                 "On the Raspberry Pi 'pip install rpi-lgpio' solves the "
+                 "problem.")
     return GPIOStub()
 
 
-GPIO = _lade_gpio()
+GPIO = _load_gpio()
 
 # Verfuegbar, wenn wirklich echtes GPIO da ist. Die Plugins pruefen das
 # vor dem Zugriff, damit sie sauber abbrechen statt einen Stub-Fehler
 # in einem Hintergrundthread auszuloesen.
-GPIO_VERFUEGBAR = not isinstance(GPIO, GPIOStub)
+GPIO_AVAILABLE = not isinstance(GPIO, GPIOStub)

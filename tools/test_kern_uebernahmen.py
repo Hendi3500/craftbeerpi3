@@ -110,8 +110,8 @@ def run():
     # 1. Ohne konfigurierten Controller bleibt der Fermenter auf Handbetrieb
     f = FakeFermenter(logic=None, state=False)
     cbpi.cache["fermenter"] = {1: f}
-    antwort = view.toggle(1)
-    check("toggle ohne Controller antwortet 204", antwort == ('', 204), repr(antwort))
+    response = view.toggle(1)
+    check("toggle ohne Controller antwortet 204", response == ('', 204), repr(response))
     check("Fermenter ohne Controller bleibt auf Handbetrieb",
           f.state is False, repr(f.state))
 
@@ -122,15 +122,15 @@ def run():
             # Der Controller laeuft, bis er gestoppt wird - wie ein echter
             # Regelungs-Controller. Ein Controller, der sofort zurueckkehrt,
             # wuerde das Flag (korrekterweise) wieder auf Handbetrieb setzen.
-            self.laeuft = True
+            self.running = True
         def init(self):
             pass
         def run(self):
-            while self.laeuft:
+            while self.running:
                 time.sleep(0.05)
         def stop(self):
             self.stopped = True
-            self.laeuft = False
+            self.running = False
 
     class FakeLogic(object):
         @staticmethod
@@ -167,22 +167,22 @@ def run():
         cbpi.cache["fermenter"] = {}
 
     print("\n--- Notification: Zeitstempel ----------------------------------")
-    empfaenger = []
+    receiver = []
     original_emit = cbpi.emit_event
 
-    def _fange_ab(name, **kwargs):
+    def _catch_error(name, **kwargs):
         if name == "MESSAGE":
-            empfaenger.append(kwargs.get("message"))
+            receiver.append(kwargs.get("message"))
         return original_emit(name, **kwargs)
 
-    cbpi.emit_event = _fange_ab
+    cbpi.emit_event = _catch_error
     try:
         cbpi.emit_message({"id": "x", "type": "info", "headline": "H",
                            "message": "M", "timeout": None})
         check("Message traegt einen Zeitstempel",
-              bool(empfaenger) and empfaenger[-1].get("timestamp") is not None,
-              repr(empfaenger[-1]) if empfaenger else "keine Message")
-        stamp = empfaenger[-1].get("timestamp")
+              bool(receiver) and receiver[-1].get("timestamp") is not None,
+              repr(receiver[-1]) if receiver else "keine Message")
+        stamp = receiver[-1].get("timestamp")
         # Epoch-Millisekunden: ungefaehr jetzt
         check("Zeitstempel ist in Millisekunden (UTC)",
               abs(stamp / 1000.0 - time.time()) < 60, repr(stamp))
@@ -191,8 +191,8 @@ def run():
         cbpi.emit_message({"id": "y", "type": "info", "headline": "H",
                            "message": "M", "timeout": None, "timestamp": 12345})
         check("bereits gestempelte Message wird nicht neu gestempelt",
-              empfaenger[-1].get("timestamp") == 12345,
-              repr(empfaenger[-1].get("timestamp")))
+              receiver[-1].get("timestamp") == 12345,
+              repr(receiver[-1].get("timestamp")))
     finally:
         cbpi.emit_event = original_emit
 
@@ -221,15 +221,15 @@ def run():
     r = client.get("/api/config/")
     import json as _json
     config = _json.loads(r.data)
-    for name, typ in (("altitude", "number"),
-                      ("brew_recipe_uuid", "text"),
-                      ("plugins_changed", "text"),
-                      ("backend_started_at", "text")):
-        eintrag = config.get(name)
-        check("Config-Parameter %s existiert" % name, eintrag is not None)
-        if eintrag is not None:
-            check("Config-Parameter %s hat den Typ %s" % (name, typ),
-                  eintrag.get("type") == typ, repr(eintrag.get("type")))
+    for name, param_type in (("altitude", "number"),
+                             ("brew_recipe_uuid", "text"),
+                             ("plugins_changed", "text"),
+                             ("backend_started_at", "text")):
+        entry = config.get(name)
+        check("Config-Parameter %s existiert" % name, entry is not None)
+        if entry is not None:
+            check("Config-Parameter %s hat den Typ %s" % (name, param_type),
+                  entry.get("type") == param_type, repr(entry.get("type")))
 
     print("\n--- /api/restart ----------------------------------------------")
     import modules.restart as restart_modul
@@ -237,7 +237,7 @@ def run():
     # Die Sockets unererbbar machen: sonst erbt das neue Prozessbild den
     # Listening-Socket des Werkzeug-Servers und der neue Server kann den
     # Port nicht binden - das Backend steht dann nicht mehr.
-    # Siehe _sockets_unererbbar_machen() in modules/restart/__init__.py.
+    # Siehe _make_sockets_non_inheritable() in modules/restart/__init__.py.
     import socket as _socket
     probe = _socket.socket()
     try:
@@ -245,28 +245,28 @@ def run():
         os.set_inheritable(probe.fileno(), True)
         check("der Test-Socket ist ererbbar (Ausgangslage)",
               os.get_inheritable(probe.fileno()) is True)
-        anzahl = restart_modul._sockets_unererbbar_machen()
+        count = restart_modul._make_sockets_non_inheritable()
         check("der Socket ist danach unererbbar",
               os.get_inheritable(probe.fileno()) is False)
-        check("die Aenderung wird gemeldet", anzahl >= 1, repr(anzahl))
+        check("die Aenderung wird gemeldet", count >= 1, repr(count))
     finally:
         probe.close()
 
     r = client.get("/api/restart")
     check("GET /api/restart antwortet 200", r.status_code == 200,
           "Status %s" % r.status_code)
-    antwort = _json.loads(r.data)
+    response = _json.loads(r.data)
     check("GET /api/restart meldet 'available'",
-          antwort.get("available") is True, repr(antwort))
+          response.get("available") is True, repr(response))
     check("GET /api/restart meldet 'pending'",
-          antwort.get("pending") is False, repr(antwort))
+          response.get("pending") is False, repr(response))
 
     # Der echte Neustart wird unterbunden: ein execv wuerde den
     # Testprozess ersetzen.
-    ausgefuehrt = []
+    executed = []
     original_exec = restart_modul.os.execv
     original_brewing = restart_modul._is_brewing
-    restart_modul.os.execv = lambda *args: ausgefuehrt.append(args)
+    restart_modul.os.execv = lambda *args: executed.append(args)
     try:
         # 1. Ein laufender Brauschritt blockiert den Neustart. Das wird
         #    simuliert, damit der Test nicht vom Zustand der echten
@@ -276,16 +276,16 @@ def run():
         r = client.post("/api/restart", json={"delay": 1})
         check("POST waehrend eines Brauschritts antwortet 409", r.status_code == 409,
               "Status %s" % r.status_code)
-        antwort = _json.loads(r.data)
-        check("die 409 nennt das laufende Brauschritt", antwort.get("brewing") is True,
-              repr(antwort))
+        response = _json.loads(r.data)
+        check("die 409 nennt das laufende Brauschritt", response.get("brewing") is True,
+              repr(response))
 
         # 2. Mit force geht es auch bei laufendem Schritt
         r = client.post("/api/restart", json={"delay": 1, "force": True})
         check("POST mit force antwortet 202", r.status_code == 202,
               "Status %s" % r.status_code)
-        antwort = _json.loads(r.data)
-        check("Antwort meldet 'pending'", antwort.get("pending") is True, repr(antwort))
+        response = _json.loads(r.data)
+        check("Antwort meldet 'pending'", response.get("pending") is True, repr(response))
 
         # 3. Ein zweiter Request waehrend des Countdowns -> 409
         r = client.post("/api/restart", json={"delay": 1, "force": True})
@@ -295,7 +295,7 @@ def run():
         # Der Countdown laeuft, der Neustart passiert aber nicht wirklich
         time.sleep(1.6)
         check("der Neustart wurde tatsaechlich ausgefuehrt (execv unterbunden)",
-              len(ausgefuehrt) == 1, repr(ausgefuehrt))
+              len(executed) == 1, repr(executed))
     finally:
         restart_modul.os.execv = original_exec
         restart_modul._is_brewing = original_brewing

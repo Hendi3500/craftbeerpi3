@@ -1,7 +1,7 @@
 import time
 import threading
 from modules import cbpi
-from modules.core.gpio import GPIO, GPIO_VERFUEGBAR
+from modules.core.gpio import GPIO, GPIO_AVAILABLE
 
 class Buzzer(object):
 
@@ -11,8 +11,8 @@ class Buzzer(object):
             cbpi.app.logger.info("INIT BUZZER NOW GPIO%s" % gpio)
             self.gpio = int(gpio)
             self.beep_level = beep_level
-            if not GPIO_VERFUEGBAR:
-                raise RuntimeError("kein GPIO-Zugriff (rpi-lgpio fehlt)")
+            if not GPIO_AVAILABLE:
+                raise RuntimeError("no GPIO access (rpi-lgpio missing)")
             GPIO.setmode(GPIO.BCM)
             GPIO.setup(self.gpio, GPIO.OUT)
             self.state = True

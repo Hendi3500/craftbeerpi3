@@ -43,26 +43,26 @@ def run():
 
     check("Import funktioniert", True)
     check("GPIO-Objekt vorhanden", gpio.GPIO is not None)
-    check("GPIO_VERFUEGBAR ist ein Boolean", isinstance(gpio.GPIO_VERFUEGBAR, bool))
+    check("GPIO_AVAILABLE ist ein Boolean", isinstance(gpio.GPIO_AVAILABLE, bool))
 
     print("\n--- Konstanten (RPi.GPIO-kompatibel) --------------------------")
-    for name, wert in (("BCM", 11), ("BOARD", 10), ("OUT", 0), ("IN", 1),
-                       ("HIGH", 1), ("LOW", 0), ("PUD_OFF", 20),
-                       ("PUD_DOWN", 21), ("PUD_UP", 22)):
-        check("GPIO.%s == %s" % (name, wert), getattr(gpio.GPIO, name, None) == wert,
+    for name, value in (("BCM", 11), ("BOARD", 10), ("OUT", 0), ("IN", 1),
+                        ("HIGH", 1), ("LOW", 0), ("PUD_OFF", 20),
+                        ("PUD_DOWN", 21), ("PUD_UP", 22)):
+        check("GPIO.%s == %s" % (name, value), getattr(gpio.GPIO, name, None) == value,
               repr(getattr(gpio.GPIO, name, None)))
 
     print("\n--- API-Vollstaendigkeit --------------------------------------")
-    for methode in ("setmode", "setup", "output", "input", "cleanup",
-                    "add_event_detect", "remove_event_detect",
-                    "event_detected", "wait_for_edge", "getmode",
-                    "setwarnings", "gpio_function"):
-        check("GPIO.%s vorhanden" % methode,
-              callable(getattr(gpio.GPIO, methode, None)))
+    for method in ("setmode", "setup", "output", "input", "cleanup",
+                   "add_event_detect", "remove_event_detect",
+                   "event_detected", "wait_for_edge", "getmode",
+                   "setwarnings", "gpio_function"):
+        check("GPIO.%s vorhanden" % method,
+              callable(getattr(gpio.GPIO, method, None)))
     check("GPIO.PWM vorhanden", getattr(gpio.GPIO, "PWM", None) is not None)
 
     print("\n--- Verhalten ohne echtes GPIO --------------------------------")
-    if gpio.GPIO_VERFUEGBAR:
+    if gpio.GPIO_AVAILABLE:
         print("  (echtes GPIO vorhanden - der Stub-Zweig wird nicht geprueft)")
     else:
         # Jeder Zugriff muss einen RuntimeError mit Klartext liefern.
@@ -104,9 +104,9 @@ def run():
     print("\n--- Frequenz-Fallback im GPIOPWM ------------------------------")
     # Ohne "frequency" in der Konfiguration ist self.frequency die
     # Property-Instanz. on() darf daran nicht mit TypeError scheitern.
-    klasse = GPIOPWM
+    klass = GPIOPWM
     try:
-        inst = klasse(api=None, id=1, name="t", gpio=17)
+        inst = klass(api=None, id=1, name="t", gpio=17)
         # on() ohne echtes GPIO wirft den Stub-Fehler - das ist erwartet.
         # Entscheidend ist, dass NICHT der TypeError aus float(Property)
         # kommt.

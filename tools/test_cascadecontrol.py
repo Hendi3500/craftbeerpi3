@@ -37,7 +37,7 @@ def check(name, condition, detail=""):
 
 def run():
     from modules.plugins.CascadeControl import (
-        Hysteresis, PID, sensor_id, temperature_einheit)
+        Hysteresis, PID, sensor_id, temperature_unit)
 
     print("--- PID ---------------------------------------------------------")
     # Der Konstruktor der Vorlage war "def **init**" - ein SyntaxError.
@@ -49,15 +49,15 @@ def run():
           abs(pid.integrator_max - 1000.0) < 1e-6, repr(pid.integrator_max))
 
     # Erste Iteration: P-Anteil wirkt sofort
-    ausgang = pid.update(current=50.0, target=60.0)
+    output = pid.update(current=50.0, target=60.0)
     check("erste Iteration liefert den P-Anteil (kp*Fehler = 7*10 = 70)",
-          abs(ausgang - 70.0) < 1e-6, repr(ausgang))
+          abs(output - 70.0) < 1e-6, repr(output))
 
     # Ausgang bleibt im Bereich
-    for Ziel in (-100.0, 0.0, 50.0, 100.0):
-        wert = pid.update(current=0.0, target=Ziel)
-        check("Ausgang bei Ziel %s bleibt in 0..100" % Ziel,
-              0.0 <= wert <= 100.0, repr(wert))
+    for target_value in (-100.0, 0.0, 50.0, 100.0):
+        value = pid.update(current=0.0, target=target_value)
+        check("Ausgang bei Ziel %s bleibt in 0..100" % target_value,
+              0.0 <= value <= 100.0, repr(value))
 
     # ki = 0 -> kein Integrator
     pid0 = PID(1.0, 0.0, 0.0, 0.0, 100.0, 1.0, 0.0)
@@ -74,7 +74,7 @@ def run():
     # on_min/on_max/off_min = 0, damit die Zeitbedingungen nicht stoeren
     # und der reine Zustandsuebergang geprueft wird.
 
-    faelle = [
+    cases = [
         # (positive, current, target, erwartet, Beschreibung)
         (True, 3.0, 5.0, True, "heizen, Istwert unter Sollwert -> AN"),
         (True, 7.0, 5.0, False, "heizen, Istwert ueber Sollwert -> AUS"),
@@ -82,10 +82,10 @@ def run():
         (False, 3.0, 5.0, False, "kuehlen, Istwert unter Sollwert -> AUS"),
     ]
 
-    for positive, current, target, erwartet, text in faelle:
+    for positive, current, target, expected, text in cases:
         h = Hysteresis(positive, on_min=0, on_max=9999, off_min=0)
-        ist_an = h.update(current, target)
-        check(text, ist_an is erwartet, "-> %r" % ist_an)
+        is_on = h.update(current, target)
+        check(text, is_on is expected, "-> %r" % is_on)
 
     print("\n--- Hysteresis: Vergleich mit der Original-Fassung ----------")
     # Die Original-Fassung hatte "not(self.positive) & (current >= target)".
@@ -147,26 +147,26 @@ def run():
     check("Text -> None", sensor_id("Sensor1") is None, repr(sensor_id("Sensor1")))
     check("bool -> None", sensor_id(True) is None, repr(sensor_id(True)))
 
-    print("\n--- temperature_einheit --------------------------------------")
-    einheit = temperature_einheit()
-    check("einheit ist C oder F", einheit in ("C", "F"), repr(einheit))
+    print("\n--- temperature_unit ----------------------------------------")
+    unit = temperature_unit()
+    check("unit ist C oder F", unit in ("C", "F"), repr(unit))
 
     # Der Config-Cache ist beim Import der Plugins leer. Der Helfer muss
     # trotzdem die eingestellte Einheit finden.
     from modules import cbpi
-    vorher = cbpi.cache.get("config")
+    previous = cbpi.cache.get("config")
     try:
         cbpi.cache["config"] = {}
         check("mit leerem Config-Cache wird die Einheit trotzdem gefunden",
-              temperature_einheit() in ("C", "F"), repr(temperature_einheit()))
+              temperature_unit() in ("C", "F"), repr(temperature_unit()))
     finally:
-        cbpi.cache["config"] = vorher
+        cbpi.cache["config"] = previous
 
     print("\n--- Controller-Registrierung ---------------------------------")
-    typen = cbpi.cache.get("controller_types", {})
+    types = cbpi.cache.get("controller_types", {})
     for name in ("CascadePID", "AdvancedPID", "CascadeHysteresis",
                  "AdvancedHysteresis"):
-        check("%s ist registriert" % name, name in typen, str(sorted(typen)))
+        check("%s ist registriert" % name, name in types, str(sorted(types)))
 
     return len(PASS), len(FAIL)
 

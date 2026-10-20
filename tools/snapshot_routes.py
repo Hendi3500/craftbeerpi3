@@ -9,7 +9,7 @@ RPi.GPIO und git gibt es nicht auf jedem Rechner - die werden fuer den
 Snapshot nur gestubbt, sonst schlaegt der Import fehl.
 
 Aufruf:  python3 tools/snapshot_routes.py
-         python3 tools/snapshot_routes.py --out pfad.json
+         python3 tools/snapshot_routes.py --out path.json
 """
 
 import json

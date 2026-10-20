@@ -109,7 +109,7 @@ PARAM_CHAT = "telegram_chat_id"
 PARAM_STARTUP = "telegram_startup_message"
 
 # Telegram nimmt hoechstens 4096 Zeichen pro Nachricht an.
-MAX_LAENGE = 4096
+MAX_LENGTH = 4096
 
 # Timeout fuer die Anfrage. Ohne Timeout haengt der Request, wenn
 # Telegram nicht antwortet - und der Thread der Ereignisbehandlung
@@ -117,7 +117,7 @@ MAX_LAENGE = 4096
 TIMEOUT = 10
 
 # Hoechstes Warten, wenn Telegram "Too Many Requests" sagt.
-MAX_WARTEZEIT = 15
+MAX_WAIT = 15
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +137,7 @@ def _log(level, text):
         logger.log(logging.ERROR if level == "error" else logging.INFO, text)
 
 
-def _ohne_token(text, token):
+def _without_token(text, token):
     """
     Den Bot-Token aus einem Text entfernen.
 
@@ -155,7 +155,7 @@ def _ohne_token(text, token):
 # Konfiguration
 # ---------------------------------------------------------------------------
 
-def _parameter_anlegen():
+def _create_parameters():
     """
     Die Config-Parameter anlegen, falls sie noch nicht da sind.
 
@@ -168,26 +168,26 @@ def _parameter_anlegen():
     Der Cache ist zu diesem Zeitpunkt gefuellt - das Config-Modul
     laeuft mit order 0, dieses Plugin mit order 9000.
     """
-    vorhanden = cbpi.cache.get("config") or {}
+    existing = cbpi.cache.get("config") or {}
 
-    for name, wert, typ, beschreibung in (
+    for name, value, param_type, description in (
         (PARAM_TOKEN, "", "text",
-         "Telegram Bot Token (von @BotFather)"),
+         "Telegram bot token (from @BotFather)"),
         (PARAM_CHAT, "", "text",
-         "Telegram Chat ID - mehrere durch Komma trennen"),
+         "Telegram chat ID - separate several with a comma"),
         (PARAM_STARTUP, "NO", "yesno",
-         "Beim Start des Backends eine Testnachricht an Telegram schicken"),
+         "Send a test message to Telegram when the backend starts"),
     ):
-        if name in vorhanden:
+        if name in existing:
             continue
         try:
-            cbpi.add_config_parameter(name, wert, typ, beschreibung)
+            cbpi.add_config_parameter(name, value, param_type, description)
         except Exception as e:
-            _log("error", "Telegram: Parameter %s konnte nicht angelegt werden: %s"
+            _log("error", "Telegram: parameter %s could not be created: %s"
                  % (name, e))
 
 
-def _einstellungen():
+def _settings():
     """
     Token und Chat-IDs aus der Konfiguration lesen.
 
@@ -200,8 +200,8 @@ def _einstellungen():
     """
     token = (cbpi.get_config_parameter(PARAM_TOKEN, "") or "").strip()
 
-    roh = (cbpi.get_config_parameter(PARAM_CHAT, "") or "").strip()
-    chats = [teil.strip() for teil in roh.split(",") if teil.strip()]
+    raw = (cbpi.get_config_parameter(PARAM_CHAT, "") or "").strip()
+    chats = [part.strip() for part in raw.split(",") if part.strip()]
 
     return token, chats
 
@@ -210,7 +210,7 @@ def _einstellungen():
 # Nachricht senden
 # ---------------------------------------------------------------------------
 
-def _formatiere(message):
+def _format_message(message):
     """
     Die Meldung in Telegram-Markdown uebertragen.
 
@@ -229,7 +229,7 @@ def _formatiere(message):
     return html.escape(text)
 
 
-def _mit_ton(message):
+def _with_sound(message):
     """
     Entscheidet, ob die Meldung am Handy klingeln darf.
 
@@ -252,7 +252,7 @@ def _mit_ton(message):
     return message.get("timeout") is None
 
 
-def _wartezeit(antwort):
+def _retry_after(response):
     """
     Die Wartezeit aus einer 429-Antwort von Telegram holen.
 
@@ -261,58 +261,58 @@ def _wartezeit(antwort):
     kleiner Wert genommen.
     """
     try:
-        daten = antwort.json()
-        return int(daten.get("parameters", {}).get("retry_after", 5))
+        data = response.json()
+        return int(data.get("parameters", {}).get("retry_after", 5))
     except Exception:
         return 5
 
 
-def _sende(token, chat, text, mit_ton=True):
+def _send(token, chat, text, with_sound=True):
     """
     Eine Nachricht an einen Chat schicken.
 
-    :param mit_ton: True heisst, die Nachricht darf am Handy klingeln.
+    :param with_sound: True heisst, die Nachricht darf am Handy klingeln.
         False heisst: stumm - der Push kommt ohne Ton. Das ist der
         Schalter ``disable_notification`` der Telegram-API.
 
     :return: True, wenn Telegram die Nachricht angenommen hat.
     """
     url = "%s/bot%s/sendMessage" % (API, token)
-    daten = {
+    data = {
         "chat_id": chat,
-        "text": text[:MAX_LAENGE],
+        "text": text[:MAX_LENGTH],
         "parse_mode": "HTML",
         # Telegram erwartet hier "true"/"false" als Text. Ein Python-
         # True wuerde als "True" in der Anfrage landen und von Telegram
         # nicht als boolescher Wert erkannt.
-        "disable_notification": "false" if mit_ton else "true",
+        "disable_notification": "false" if with_sound else "true",
     }
 
-    for versuch in range(2):
+    for attempt in range(2):
         try:
-            antwort = requests.post(url, data=daten, timeout=TIMEOUT)
+            response = requests.post(url, data=data, timeout=TIMEOUT)
         except requests.RequestException as e:
             # Nur der Typ des Fehlers - der Text von requests enthaelt
             # die vollstaendige URL und damit den Bot-Token.
-            _log("error", "Telegram: Anfrage fehlgeschlagen (%s)" % type(e).__name__)
+            _log("error", "Telegram: request failed (%s)" % type(e).__name__)
             return False
         except Exception as e:
-            _log("error", "Telegram: unerwarteter Fehler: %s" % type(e).__name__)
+            _log("error", "Telegram: unexpected error: %s" % type(e).__name__)
             return False
 
-        if antwort.status_code == 429:
+        if response.status_code == 429:
             # Telegram ist voll (zu viele Nachrichten in der Zeit).
             # Kurz warten und einmal versuchen.
-            if versuch == 0:
-                wartezeit = min(_wartezeit(antwort), MAX_WARTEZEIT)
-                _log("info", "Telegram: zu viele Nachrichten - warte %ss" % wartezeit)
-                time.sleep(wartezeit)
+            if attempt == 0:
+                wait_seconds = min(_retry_after(response), MAX_WAIT)
+                _log("info", "Telegram: too many messages - waiting %ss" % wait_seconds)
+                time.sleep(wait_seconds)
                 continue
             return False
 
-        if antwort.status_code != 200:
+        if response.status_code != 200:
             _log("error", "Telegram: HTTP %s - %s"
-                 % (antwort.status_code, _ohne_token(antwort.text[:200], token)))
+                 % (response.status_code, _without_token(response.text[:200], token)))
             return False
 
         return True
@@ -320,7 +320,7 @@ def _sende(token, chat, text, mit_ton=True):
     return False
 
 
-def _sende_an_alle(token, chats, text, mit_ton=True):
+def _send_to_all(token, chats, text, with_sound=True):
     """
     Eine Nachricht an alle Empfaenger schicken.
 
@@ -329,8 +329,8 @@ def _sende_an_alle(token, chats, text, mit_ton=True):
     Kreislauf waere nicht zu Ende.
     """
     for chat in chats:
-        if not _sende(token, chat, text, mit_ton=mit_ton):
-            _log("error", "Telegram: Nachricht an Chat %s nicht zugestellt" % chat)
+        if not _send(token, chat, text, with_sound=with_sound):
+            _log("error", "Telegram: message to chat %s not delivered" % chat)
 
 
 # ---------------------------------------------------------------------------
@@ -346,9 +346,9 @@ def message_event(message):
     wuerde sonst den Aufrufer festhalten.
     """
     try:
-        token, chats = _einstellungen()
+        token, chats = _settings()
     except Exception as e:
-        _log("error", "Telegram: Konfiguration nicht lesbar: %s" % type(e).__name__)
+        _log("error", "Telegram: configuration not readable: %s" % type(e).__name__)
         return
 
     if not token or not chats:
@@ -358,13 +358,13 @@ def message_event(message):
         return
 
     try:
-        text = _formatiere(message)
+        text = _format_message(message)
     except Exception as e:
-        _log("error", "Telegram: Meldung nicht formatierbar: %s" % type(e).__name__)
+        _log("error", "Telegram: message not formattable: %s" % type(e).__name__)
         return
 
     # Nur die Meldungen ohne Ablauf-Timer duerfen am Handy klingeln.
-    _sende_an_alle(token, chats, text, mit_ton=_mit_ton(message))
+    _send_to_all(token, chats, text, with_sound=_with_sound(message))
 
 
 @cbpi.initalizer(order=9000)
@@ -376,39 +376,39 @@ def init(cbpi):
     (das Config-Modul laeuft mit order 0), und die Meldungen des
     Notification-Moduls laufen bereits.
     """
-    _parameter_anlegen()
+    _create_parameters()
 
-    token, chats = _einstellungen()
+    token, chats = _settings()
 
     if not token:
         cbpi.notify("Telegram",
-                    "Kein Bot-Token gesetzt - es werden keine Nachrichten "
-                    "an Telegram geschickt. Token und Chat-ID unter "
-                    "System -> Parameter eintragen.",
+                    "No bot token set - no messages will be sent to "
+                    "Telegram. Enter token and chat ID under "
+                    "System -> Parameters.",
                     type="warning", timeout=None)
         return
 
     if not chats:
         cbpi.notify("Telegram",
-                    "Keine Chat-ID gesetzt - es werden keine Nachrichten "
-                    "an Telegram geschickt. Token und Chat-ID unter "
-                    "System -> Parameter eintragen.",
+                    "No chat ID set - no messages will be sent to "
+                    "Telegram. Enter token and chat ID under "
+                    "System -> Parameters.",
                     type="warning", timeout=None)
         return
 
-    _log("info", "Telegram: Plugin bereit (%d Empfaenger)" % len(chats))
+    _log("info", "Telegram: plugin ready (%d recipients)" % len(chats))
 
     if (cbpi.get_config_parameter(PARAM_STARTUP, "YES") or "YES") == "YES":
         # Die Startnachricht geht in den Hintergrund: eine Telegram, die
         # nicht antwortet, darf den Start des Backends nicht aufhalten.
         cbpi.socketio.start_background_task(
-            target=_startnachricht,
+            target=_startup_message,
             token=token,
             chats=chats,
         )
 
 
-def _startnachricht(token, chats):
+def _startup_message(token, chats):
     """
     Die Testnachricht nach dem Start schicken.
 
@@ -420,6 +420,7 @@ def _startnachricht(token, chats):
     ``telegram_startup_message``). Wer sie nicht hoeren will, stellt
     den Parameter auf ``NO``.
     """
-    text = ("<b>Telegram-Anbindung aktiv</b>\n"
-            "<i>CraftBeerPi laeuft. Ab jetzt kommen alle Meldungen hier.</i>")
-    _sende_an_alle(token, chats, text, mit_ton=True)
+    text = ("<b>Telegram connection active</b>\n"
+            "<i>CraftBeerPi is running. All messages will show up here "
+            "from now on.</i>")
+    _send_to_all(token, chats, text, with_sound=True)

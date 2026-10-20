@@ -107,7 +107,7 @@ class StepView(BaseView):
             try:
                 step.finish()
             except Exception as e:
-                cbpi.app.logger.error("finish() des Schritts %s fehlgeschlagen: %s"
+                cbpi.app.logger.error("finish() of step %s failed: %s"
                                        % (getattr(step, "id", "?"), e))
 
             # Der Reset muss auch das Heizen beenden.
@@ -126,8 +126,8 @@ class StepView(BaseView):
                 try:
                     cbpi.emit_event("SET_TARGET_TEMP", id=int(kettle), temp=0)
                 except Exception as e:
-                    cbpi.app.logger.error("Zieltemperatur des Kessels %s konnte "
-                                           "nicht zurueckgesetzt werden: %s" % (kettle, e))
+                    cbpi.app.logger.error("Target temperature of kettle %s could not "
+                                           "be reset: %s" % (kettle, e))
 
     @route('/reset/current', methods=['POST'])
     def resetCurrentStep(self):

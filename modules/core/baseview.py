@@ -50,7 +50,7 @@ class BaseView(FlaskView):
         pass
 
 
-    def _hole_eintrag(self, id):
+    def _get_entry(self, id):
         """
         Den Eintrag mit der Id aus dem Cache holen, oder None.
 
@@ -69,14 +69,14 @@ class BaseView(FlaskView):
         if cache is None:
             return None
 
-        eintrag = cache.get(id)
+        entry = cache.get(id)
 
-        if eintrag is None:
-            eintrag = self.model.get_one(id)
-            if eintrag is not None:
-                cache[id] = eintrag
+        if entry is None:
+            entry = self.model.get_one(id)
+            if entry is not None:
+                cache[id] = entry
 
-        return eintrag
+        return entry
 
     @route('/<int:id>', methods=["PUT"])
     def put(self, id):
@@ -87,14 +87,14 @@ class BaseView(FlaskView):
         except:
             pass
         if self.api.cache.get(self.cache_key) is not None:
-            eintrag = self._hole_eintrag(id)
-            if eintrag is None:
+            entry = self._get_entry(id)
+            if entry is None:
                 return ('Not found', 404)
-            self._pre_put_callback(eintrag)
-            eintrag.__dict__.update(**data)
-            m = self.model.update(**eintrag.__dict__)
-            self._post_put_callback(eintrag)
-            return json.dumps(eintrag)
+            self._pre_put_callback(entry)
+            entry.__dict__.update(**data)
+            m = self.model.update(**entry.__dict__)
+            self._post_put_callback(entry)
+            return json.dumps(entry)
         else:
             m = self.model.update(**data)
 
@@ -111,14 +111,14 @@ class BaseView(FlaskView):
     @route('/<int:id>', methods=["DELETE"])
     def delete(self, id):
         if self.api.cache.get(self.cache_key) is not None:
-            eintrag = self._hole_eintrag(id)
-            if eintrag is None:
+            entry = self._get_entry(id)
+            if entry is None:
                 # Unbekannte Id: 404 statt eines 500ers mit KeyError.
                 # Ein Client mit veraltetem Zustand loescht sonst Objekte,
                 # die es nicht mehr gibt, und der Server beantwortet das
                 # mit einem Stacktrace.
                 return ('Not found', 404)
-            self._pre_delete_callback(eintrag)
+            self._pre_delete_callback(entry)
             del self.api.cache.get(self.cache_key)[id]
         m = self.model.delete(id)
 

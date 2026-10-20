@@ -88,9 +88,9 @@ def run():
     # Nicht "den ersten Sensor" nehmen: in einer installierten Instanz gibt
     # es bereits Sensoren (z. B. den MQTT-Sensor). Gesucht ist der, den der
     # Test gerade selbst angelegt hat.
-    werte = list(sensors.values()) if isinstance(sensors, dict) else sensors
-    gefunden = [s for s in werte if isinstance(s, dict) and s.get("name") == "JsonSensor"]
-    found = gefunden[-1] if gefunden else None
+    values = list(sensors.values()) if isinstance(sensors, dict) else sensors
+    matches = [s for s in values if isinstance(s, dict) and s.get("name") == "JsonSensor"]
+    found = matches[-1] if matches else None
     check("Sensor-Payload enthaelt name", isinstance(found, dict) and found.get("name") == "JsonSensor",
           str(found)[:80])
 
@@ -102,9 +102,9 @@ def run():
 
     # Der eigene Test-Sensor, damit die Pruefung unabhaengig von vorhandenen
     # Sensoren in der Datenbank ist.
-    eigene_ids = [sid for sid, s in cbpi.cache.get("sensors").items()
-                   if getattr(s, "name", None) == "JsonSensor"]
-    sensor_ids = eigene_ids or list(cbpi.cache.get("sensors").keys())
+    own_ids = [sid for sid, s in cbpi.cache.get("sensors").items()
+               if getattr(s, "name", None) == "JsonSensor"]
+    sensor_ids = own_ids or list(cbpi.cache.get("sensors").keys())
 
     if socket_json is not None and sensor_ids:
         sensor = cbpi.cache["sensors"][sensor_ids[-1]]
@@ -122,25 +122,25 @@ def run():
     # Zeigt, warum der Wrapper noetig ist
     try:
         flask_json.dumps(cbpi.cache["sensors"][sensor_ids[-1]])
-        ausserhalb_ok = True
-        ausserhalb_detail = ""
+        outside_ok = True
+        outside_detail = ""
     except TypeError as e:
-        ausserhalb_ok = False
-        ausserhalb_detail = str(e)
+        outside_ok = False
+        outside_detail = str(e)
 
     check(
         "flask_json.dumps scheitert ausserhalb des Kontexts (erwartet)",
-        not ausserhalb_ok,
+        not outside_ok,
         "sollte scheitern, tat es aber nicht",
     )
     check(
         "...und genau deshalb ist der FlaskSafeJSON-Wrapper noetig",
-        ausserhalb_ok is False and socket_json is not None,
-        ausserhalb_detail,
+        outside_ok is False and socket_json is not None,
+        outside_detail,
     )
 
     print("\n--- Unbekannte Typen -------------------------------------------")
-    class Unbekannt(object):
+    class Unknown(object):
         pass
 
     # Der ComplexEncoder aus Flask 0.12 gab fuer jeden unbekannten Typ
@@ -151,14 +151,14 @@ def run():
     # /api/system/dump HTTP 500, sobald ein Kessel benutzt wurde.
     # Der None-Zweig ist deshalb dokumentiertes Verhalten, kein Versehen.
     with app.app_context():
-        ergebnis = json.loads(flask_json.dumps(Unbekannt()))
+        result = json.loads(flask_json.dumps(Unknown()))
     check("unbekannter Typ wird zu null (wie ComplexEncoder 0.12)",
-          ergebnis is None, repr(ergebnis))
+          result is None, repr(result))
 
     # Der eigentliche Nutzen: die Endpunkte duerfen nicht mehr mit 500
     # antworten, wenn zur Laufzeit Instanzen im Cache liegen.
-    kessel_ids = list(cbpi.cache.get("kettle", {}).keys())
-    if kessel_ids:
+    kettle_ids = list(cbpi.cache.get("kettle", {}).keys())
+    if kettle_ids:
         status, _ = safe_get(client, "/api/kettle/")
         check("/api/kettle/ antwortet trotz Laufzeit-Instanzen mit 200",
               status == 200, str(status))
@@ -183,17 +183,17 @@ def run():
     # Aufraeumen: der Test legt einen Sensor an und muss ihn auch wieder
     # entfernen - sonst sammelt sich in einer echten Installation bei jedem
     # Lauf ein "JsonSensor" in der Datenbank.
-    for sid in eigene_ids:
+    for sid in own_ids:
         try:
             client.delete("/api/sensor/%s" % sid)
         except Exception:
             pass
-    if eigene_ids:
+    if own_ids:
         rest = json.loads(client.get("/api/sensor/").data)
-        werte = list(rest.values()) if isinstance(rest, dict) else rest
+        values = list(rest.values()) if isinstance(rest, dict) else rest
         check("Test-Sensor wieder entfernt",
-              not [s for s in werte if isinstance(s, dict) and s.get("name") == "JsonSensor"],
-              str([s.get("name") for s in werte]))
+              not [s for s in values if isinstance(s, dict) and s.get("name") == "JsonSensor"],
+              str([s.get("name") for s in values]))
 
     return len(PASS), len(FAIL)
 

@@ -185,7 +185,7 @@ bindet an `0.0.0.0`, ist also im LAN erreichbar. Empirisch belegt: der
 Name `../../logs` normiert auf `logs` und liegt damit außerhalb von
 `modules/plugins`.
 
-Jetzt gilt `_plugin_pfad()`: der Name muss dem Muster
+Jetzt gilt `_plugin_path()`: der Name muss dem Muster
 `^[A-Za-z0-9][A-Za-z0-9_.-]*$` entsprechen, höchstens 100 Zeichen lang
 sein, und der aufgelöste Pfad muss in `modules/plugins` liegen. Betroffen
 sind `getFile`, `createPlugin`, `saveFile`, `deletePlugin`, `reload_plugin`,
@@ -347,7 +347,7 @@ veraltetem Zustand - die Oberflaeche hatte einen Fermenter im State, den
 das Backend schon nicht mehr hatte - bekam einen **500er mit
 Stacktrace** statt einer sauberen Antwort.
 
-`modules/core/baseview.py` hat jetzt `_hole_eintrag()`: fehlt die Id im
+`modules/core/baseview.py` hat jetzt `_get_entry()`: fehlt die Id im
 Cache, wird die Datenbank gefragt (und der Cache nachgetragen, falls er
 der aeltere Teil ist), und liegt sie auch dort nicht, antworten PUT und
 DELETE mit **404**. Das betrifft alle Views, die von `BaseView` erben:

@@ -96,28 +96,28 @@ def run():
     print("\n--- Background-Tasks als echte Threads -----------------------")
     import threading
 
-    aufrufe = []
+    calls = []
 
     def probe_task(api):
-        aufrufe.append(1)
+        calls.append(1)
 
     cbpi.cache["background"].append(
         {"function": probe_task, "key": "probe", "interval": 0.05, "config_parameter": None}
     )
-    vorher = threading.active_count()
+    before = threading.active_count()
     cbpi.run_background_processes()
     time.sleep(0.4)
 
-    check("Background-Task wird aufgerufen", len(aufrufe) >= 2,
-          "%d Aufrufe" % len(aufrufe))
-    check("neue Threads sind gestartet", threading.active_count() > vorher,
-          "vorher %d, jetzt %d" % (vorher, threading.active_count()))
+    check("Background-Task wird aufgerufen", len(calls) >= 2,
+          "%d Aufrufe" % len(calls))
+    check("neue Threads sind gestartet", threading.active_count() > before,
+          "vorher %d, jetzt %d" % (before, threading.active_count()))
 
     t0 = time.time()
     socketio.sleep(0.25)
-    dauer = time.time() - t0
-    check("socketio.sleep() haelt die Schleife auf", dauer >= 0.2,
-          "dauerte %.3fs" % dauer)
+    duration = time.time() - t0
+    check("socketio.sleep() haelt die Schleife auf", duration >= 0.2,
+          "dauerte %.3fs" % duration)
 
     print("\n--- Event-Bus --------------------------------------------------")
     check("Event-Bus hat MESSAGE-Handler", "MESSAGE" in cbpi.eventbus)

@@ -18,7 +18,7 @@ class Hysteresis(FermenterController):
         self.cooler_off()
 
     def run(self):
-        gemeldet = False
+        reported = False
 
         while self.is_running():
 
@@ -37,19 +37,19 @@ class Hysteresis(FermenterController):
                 # "Auto" hat einfach nichts getan. Jetzt wird der Zyklus
                 # nur uebersprungen; der Controller laeuft weiter und
                 # schaltet, sobald ein Wert da ist.
-                if not gemeldet:
-                    gemeldet = True
+                if not reported:
+                    reported = True
                     try:
                         cbpi.app.logger.warning(
-                            "Fermenter %s: noch kein Sensorwert - der "
-                            "Controller wartet auf den Sensor"
+                            "Fermenter %s: no sensor value yet - the "
+                            "controller is waiting for the sensor"
                             % getattr(self, "fermenter_id", "?"))
                     except Exception:
                         pass
                 self.sleep(1)
                 continue
 
-            gemeldet = False
+            reported = False
 
             if temp + float(self.heater_offset_min) <= target_temp:
                 self.heater_on(100)

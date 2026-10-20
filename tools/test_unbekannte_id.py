@@ -56,10 +56,10 @@ def run():
                                     "config": {}}),
     ]
 
-    for name, pfad, daten in views:
+    for name, path, data in views:
         print("\n--- %s ------------------------------------------------" % name)
 
-        r = client.post(pfad, json=daten)
+        r = client.post(path, json=data)
         check("POST %s legt ein Objekt an" % name, r.status_code == 200,
               "Status %s" % r.status_code)
         if r.status_code != 200:
@@ -69,27 +69,27 @@ def run():
         id = obj.get("id")
 
         # 1. PUT auf eine unbekannte Id
-        r = client.put("%s%d" % (pfad, id + 9000), json=dict(daten, name="X"))
+        r = client.put("%s%d" % (path, id + 9000), json=dict(data, name="X"))
         check("PUT auf unbekannte Id -> 404", r.status_code == 404,
               "Status %s" % r.status_code)
 
         # 2. DELETE auf eine unbekannte Id
-        r = client.delete("%s%d" % (pfad, id + 9000))
+        r = client.delete("%s%d" % (path, id + 9000))
         check("DELETE auf unbekannte Id -> 404", r.status_code == 404,
               "Status %s" % r.status_code)
 
         # 3. PUT auf die bekannte Id funktioniert weiter
-        r = client.put("%s%d" % (pfad, id), json=dict(daten, name="IdTestGeaendert"))
+        r = client.put("%s%d" % (path, id), json=dict(data, name="IdTestGeaendert"))
         check("PUT auf bekannte Id -> 200", r.status_code == 200,
               "Status %s: %s" % (r.status_code, r.data[:100]))
 
         # 4. DELETE auf die bekannte Id funktioniert weiter
-        r = client.delete("%s%d" % (pfad, id))
+        r = client.delete("%s%d" % (path, id))
         check("DELETE auf bekannte Id -> 204", r.status_code == 204,
               "Status %s" % r.status_code)
 
         # 5. Das Objekt ist danach wirklich weg
-        r = client.get("%s%d" % (pfad, id))
+        r = client.get("%s%d" % (path, id))
         rest = r.data.decode(errors="replace")
         check("geloeschtes Objekt ist nicht mehr da",
               rest.strip() in ("null", "", "{}"), rest[:80])
@@ -110,14 +110,14 @@ def run():
     import sqlite3 as _sqlite3
 
     db_path = os.path.join(ROOT, "craftbeerpi.db")
-    belegte_ids = set()
+    taken_ids = set()
 
     try:
         db = _sqlite3.connect(db_path)
         db.row_factory = _sqlite3.Row
-        for tabelle, spalte in (("sensor", "id"), ("fermenter", "id")):
-            for row in db.execute("SELECT %s FROM %s" % (spalte, tabelle)):
-                belegte_ids.add(int(row[0]))
+        for table, column in (("sensor", "id"), ("fermenter", "id")):
+            for row in db.execute("SELECT %s FROM %s" % (column, table)):
+                taken_ids.add(int(row[0]))
         db.close()
     except Exception:
         pass
@@ -127,26 +127,26 @@ def run():
     # weggeraeumt, damit der Test nicht an ihm scheitert.
     try:
         db = _sqlite3.connect(db_path)
-        for tabelle in ("sensor", "fermenter"):
-            db.execute("DELETE FROM %s WHERE name LIKE 'IdTest%%'" % tabelle)
+        for table in ("sensor", "fermenter"):
+            db.execute("DELETE FROM %s WHERE name LIKE 'IdTest%%'" % table)
         db.commit()
         db.close()
     except Exception:
         pass
 
-    def _freie_id():
+    def _free_id():
         """Eine Id, die es in beiden Tabellen sicher nicht gibt."""
-        kandidat = 2
-        while kandidat in belegte_ids:
-            kandidat += 1
-        return kandidat
+        candidate = 2
+        while candidate in taken_ids:
+            candidate += 1
+        return candidate
 
-    sensor_id = _freie_id()
+    sensor_id = _free_id()
     r = client.delete("/api/sensor/%d" % sensor_id)
     check("DELETE /api/sensor/%d (unbekannt) -> 404 statt 500" % sensor_id,
           r.status_code == 404, "Status %s" % r.status_code)
 
-    fermenter_id = _freie_id()
+    fermenter_id = _free_id()
     r = client.delete("/api/fermenter/%d" % fermenter_id)
     check("DELETE /api/fermenter/%d (unbekannt) -> 404 statt 500" % fermenter_id,
           r.status_code == 404, "Status %s" % r.status_code)
