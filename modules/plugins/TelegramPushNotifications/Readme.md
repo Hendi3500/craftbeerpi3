@@ -55,6 +55,20 @@ Die Meldungen der Notification-Oberflaeche (`GET /api/notification/`)
 sind davon nicht betroffen - das sind die eintragbaren Nachrichten des
 Kerns, keine Ereignisse.
 
+## Der Ton am Handy
+
+Nur die Meldungen **ohne** Ablauf-Timer klingeln am Handy. Das sind
+die Meldungen, die in der Oberflaeche liegen bleiben, bis sie
+weggeklickt werden - Fehler, Warnungen, "Brewing Finished". Die
+kurzen Meldungen mit Timer (5 Sekunden, verschwinden von selbst)
+kommen stumm an: sie sind Zwischenstaende, keine Ereignisse, und
+das Handy soll nicht bei jedem Schritt klingeln.
+
+Umgesetzt ist das mit `disable_notification` der Telegram-API: die
+Meldung kommt in jedem Fall an, nur eben ohne Ton. Die Startnachricht
+klingelt - sie hat keinen Timer und man hat sie sich ausdruecklich
+gewuenscht.
+
 ## Hinweise
 
 - Der Bot-Token steht in der URL der Telegram-API. Das Plugin maskiert

@@ -56,6 +56,16 @@ Was an der Vorlage geaendert wurde und warum
     funktioniert - vorher musste er auf die erste Meldung des
     Brauvorgangs warten, um es zu erfahren. Abschaltbar ueber den
     Parameter ``telegram_startup_message``.
+11. **Jede Meldung piepte am Handy.** Jede Meldung kam als Push an -
+    das Handy hat bei jedem Zwischenstand geklingelt, auch bei den
+    kurzen Meldungen, die nach fuenf Sekunden wieder verschwinden.
+    Der Ton gehoert aber nur zu den Meldungen, die keinen Ablauf-
+    Timer haben: die bleiben liegen, bis sie weggeklickt werden, und
+    die muss der Brauer auch auf dem Handy bemerken. Die Telegram-
+    API kann das - ``sendMessage`` kennt den Schalter
+    ``disable_notification`` ("Sends the message silently. Users will
+    receive a notification with no sound."). Meldungen mit Timer
+    werden damit stumm geschickt, die ohne Timer mit Ton.
 
 Einrichtung
 -----------
@@ -219,6 +229,29 @@ def _formatiere(message):
     return html.escape(text)
 
 
+def _mit_ton(message):
+    """
+    Entscheidet, ob die Meldung am Handy klingeln darf.
+
+    Der Kern gibt jeder Meldung einen ``timeout`` mit:
+
+    * ``None`` - die Meldung bleibt liegen, bis sie weggeklickt wird.
+      Sie ist wichtig genug, um den Brauer auch auf dem Handy zu
+      wecken: Ton an.
+    * eine Zahl (in der Regel 5000) - die Meldung verschwindet nach
+      ein paar Sekunden wieder. Sie ist ein Zwischenstand, kein
+      Ereignis: kein Ton.
+
+    Deshalb piept das Handy nur bei den Meldungen ohne Ablauf-Timer.
+    """
+    if not isinstance(message, dict):
+        # Kein Dict, kein Timeout - lieber mit Ton. Eine Meldung ohne
+        # Angabe ist eher eine bleibende.
+        return True
+
+    return message.get("timeout") is None
+
+
 def _wartezeit(antwort):
     """
     Die Wartezeit aus einer 429-Antwort von Telegram holen.
@@ -234,9 +267,13 @@ def _wartezeit(antwort):
         return 5
 
 
-def _sende(token, chat, text):
+def _sende(token, chat, text, mit_ton=True):
     """
     Eine Nachricht an einen Chat schicken.
+
+    :param mit_ton: True heisst, die Nachricht darf am Handy klingeln.
+        False heisst: stumm - der Push kommt ohne Ton. Das ist der
+        Schalter ``disable_notification`` der Telegram-API.
 
     :return: True, wenn Telegram die Nachricht angenommen hat.
     """
@@ -245,6 +282,10 @@ def _sende(token, chat, text):
         "chat_id": chat,
         "text": text[:MAX_LAENGE],
         "parse_mode": "HTML",
+        # Telegram erwartet hier "true"/"false" als Text. Ein Python-
+        # True wuerde als "True" in der Anfrage landen und von Telegram
+        # nicht als boolescher Wert erkannt.
+        "disable_notification": "false" if mit_ton else "true",
     }
 
     for versuch in range(2):
@@ -279,7 +320,7 @@ def _sende(token, chat, text):
     return False
 
 
-def _sende_an_alle(token, chats, text):
+def _sende_an_alle(token, chats, text, mit_ton=True):
     """
     Eine Nachricht an alle Empfaenger schicken.
 
@@ -288,7 +329,7 @@ def _sende_an_alle(token, chats, text):
     Kreislauf waere nicht zu Ende.
     """
     for chat in chats:
-        if not _sende(token, chat, text):
+        if not _sende(token, chat, text, mit_ton=mit_ton):
             _log("error", "Telegram: Nachricht an Chat %s nicht zugestellt" % chat)
 
 
@@ -322,7 +363,8 @@ def message_event(message):
         _log("error", "Telegram: Meldung nicht formatierbar: %s" % type(e).__name__)
         return
 
-    _sende_an_alle(token, chats, text)
+    # Nur die Meldungen ohne Ablauf-Timer duerfen am Handy klingeln.
+    _sende_an_alle(token, chats, text, mit_ton=_mit_ton(message))
 
 
 @cbpi.initalizer(order=9000)
@@ -372,7 +414,12 @@ def _startnachricht(token, chats):
 
     Sie beantwortet die Frage "funktioniert die Anbindung?" ohne
     Warten auf die erste Meldung des Brauvorgangs.
+
+    Die Nachricht klingelt am Handy - sie hat keinen Ablauf-Timer und
+    der Brauer hat sie sich ausdruecklich gewuenscht (Parameter
+    ``telegram_startup_message``). Wer sie nicht hoeren will, stellt
+    den Parameter auf ``NO``.
     """
     text = ("<b>Telegram-Anbindung aktiv</b>\n"
             "<i>CraftBeerPi laeuft. Ab jetzt kommen alle Meldungen hier.</i>")
-    _sende_an_alle(token, chats, text)
+    _sende_an_alle(token, chats, text, mit_ton=True)

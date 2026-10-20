@@ -129,6 +129,16 @@ def run():
         check("die Nachricht hat ein Timeout", gesendet and gesendet[0][2] == telegram.TIMEOUT)
         check("der Token steht in der URL", gesendet and "123456:ABC" in gesendet[0][0])
 
+        # Der Ton: Telegram kennt den Schalter disable_notification.
+        check("mit Ton wird der Ton nicht abgeschaltet",
+              gesendet[0][1].get("disable_notification") == "false", repr(gesendet))
+
+        gesendet.clear()
+        telegram._sende("123456:ABC", "111", "<b>Test</b>", mit_ton=False)
+        check("ohne Ton wird der Ton abgeschaltet",
+              gesendet and gesendet[0][1].get("disable_notification") == "true",
+              repr(gesendet))
+
         gesendet.clear()
 
         def fake_post_429(url, data=None, timeout=None):
@@ -173,6 +183,39 @@ def run():
     try:
         telegram.message_event({"headline": "Test", "message": "Test"})
         check("ohne Token wird nichts gesendet", len(aufrufe) == 0, repr(aufrufe))
+    finally:
+        telegram.requests.post = original_post
+        cbpi.get_config_parameter = original_get
+
+    print("\n--- Der Ton haengt am Ablauf-Timer -----------------------")
+    check("eine Meldung ohne Timer klingelt",
+          telegram._mit_ton({"headline": "H", "message": "M", "timeout": None}) is True)
+    check("eine Meldung mit Timer klingelt nicht",
+          telegram._mit_ton({"headline": "H", "message": "M", "timeout": 5000}) is False)
+    check("eine Meldung ohne Timeout-Angabe klingelt",
+          telegram._mit_ton({"headline": "H", "message": "M"}) is True)
+
+    gesendet.clear()
+    original_post = telegram.requests.post
+    original_get = cbpi.get_config_parameter
+    cbpi.get_config_parameter = lambda name, default=None: {
+        telegram.PARAM_TOKEN: "123456:ABC",
+        telegram.PARAM_CHAT: "111",
+    }.get(name, default)
+    telegram.requests.post = fake_post
+    try:
+        telegram.message_event({"headline": "Fehler", "message": "Kessel kalt",
+                                "timeout": None})
+        check("eine bleibende Meldung klingelt am Handy",
+              gesendet and gesendet[-1][1].get("disable_notification") == "false",
+              repr(gesendet))
+
+        gesendet.clear()
+        telegram.message_event({"headline": "Schritt", "message": "Heizen",
+                                "timeout": 5000})
+        check("eine Meldung mit Timer kommt ohne Ton",
+              gesendet and gesendet[-1][1].get("disable_notification") == "true",
+              repr(gesendet))
     finally:
         telegram.requests.post = original_post
         cbpi.get_config_parameter = original_get
