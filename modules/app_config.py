@@ -140,6 +140,16 @@ app.json = ComplexJSONProvider(app)
 # jeden Request mit dem Socket.IO-Handshake mit "Not an accepted origin." (400)
 # ablehnen und der Browser verbindet sich nie. Das Backend selbst bindet nur
 # an 0.0.0.0 im lokalen Netz, deshalb ist das hier unkritisch.
+#
+# allow_upgrades=False ist Pflicht, solange der Werkzeug-Entwicklungsserver
+# laeuft: der kann den WebSocket-Upgrade nicht bedienen, der Engine.IO-Server
+# antwortet darauf mit 400. Der Client versucht es trotzdem - socket.io-client
+# 4 beendet die Verbindung nach dem fehlgeschlagenen Upgrade und verbindet
+# sich *nicht* wieder, weil der Manager skipReconnect gesetzt hat. Die
+# Oberflaeche haengt dann dauerhaft ohne Live-Daten da: keine Temperaturen,
+# kein Aktualisieren nach einem Schritt-Reset, und der Knopf "Auto" am
+# Fermenter sieht tot aus. Der Handshake sagt mit "upgrades": [] gleich die
+# Wahrheit - der Client bleibt auf Polling, das der Server kann.
 socketio = SocketIO(
     app,
     json=json,
@@ -147,6 +157,7 @@ socketio = SocketIO(
     async_mode="threading",
     namespaces=["/", "/brew"],
     cors_allowed_origins="*",
+    allow_upgrades=False,
 )
 cbpi   = CraftBeerPi(app, socketio)
 

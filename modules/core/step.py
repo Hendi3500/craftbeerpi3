@@ -1,5 +1,5 @@
 from modules import cbpi
-from modules.core.props import StepProperty, Property
+from modules.core.props import StepProperty, Property, apply_property_defaults
 import time
 
 
@@ -128,6 +128,18 @@ class StepBase(Timer, ActorAPI, SensorAPI, KettleAPI):
         self.kettle_id = kwds.get("kettleid")
         self.value = None
         self.__dirty = False
+
+        # Die Konfigurationsfelder des Schritts sind als Property-Objekte
+        # als Klassenattribut hinterlegt. Was die Konfiguration nicht
+        # liefert, bekommt hier seinen Vorgabewert.
+        #
+        # Besonders wichtig ist "timer_end" aus Timer: ohne diesen Wert
+        # blieb das Property-Objekt stehen, der Timer startete nicht
+        # ("self.timer_end is not None" war immer wahr) und
+        # is_timer_finished() warf bei jedem Durchlauf einen TypeError -
+        # der Schritt-Task stirbt damit im Sekundentakt.
+        # Siehe modules.core.props.apply_property_defaults.
+        apply_property_defaults(self, kwds)
 
 
     def is_dirty(self):

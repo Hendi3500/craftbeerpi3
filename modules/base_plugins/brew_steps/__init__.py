@@ -84,6 +84,17 @@ class MashInStep(StepBase):
         self.s = False
         self.set_target_temp(self.temp, self.kettle)
 
+    def finish(self):
+        '''
+        Der Schritt ist vorbei - die Zieltemperatur des Kessels gehoert
+        zurueckgesetzt.
+
+        Ohne das bleibt die Temperatur des Schritts im Kessel stehen und
+        der Kessel heizt weiter, obwohl der Schritt nicht mehr laeuft.
+        MashStep und BoilStep machen es genauso.
+        '''
+        self.set_target_temp(0, self.kettle)
+
 
 
     def execute(self):
@@ -255,6 +266,16 @@ class BoilStep(StepBase):
         return "Hop %s" % number
 
     def check_hop_timer(self, number, value):
+
+        if value is None:
+            # Fuer diesen Hop ist nichts eingetragen. Ein Rezept hat
+            # seltener fuenf Hop-Slots als fuenf Hopgaben.
+            #
+            # Vorher ist der Schritt hier gestorben: int(None) wirft
+            # TypeError, und der Fehler reisst die ganze execute()-Runde
+            # mit - die Hop-Meldungen der slots nach diesem kamen nicht
+            # mehr und der Schritt lief nie fertig.
+            return
 
         if self.__getattribute__("hop_%s_added" % number) is not True and time.time() > (
             self.timer_end - (int(self.timer) * 60 - int(value) * 60)):

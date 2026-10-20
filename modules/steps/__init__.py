@@ -98,13 +98,36 @@ class StepView(BaseView):
     def stop_step(self):
         '''
         stop active step
-        :return: 
+        :return:
         '''
         step = cbpi.cache.get("active_step")
         cbpi.cache["active_step"] = None
 
         if step is not None:
-            step.finish()
+            try:
+                step.finish()
+            except Exception as e:
+                cbpi.app.logger.error("finish() des Schritts %s fehlgeschlagen: %s"
+                                       % (getattr(step, "id", "?"), e))
+
+            # Der Reset muss auch das Heizen beenden.
+            #
+            # Die Schritte stehen wieder auf "idle", aber der Kessel hatte
+            # die Zieltemperatur des Schritts bekommen - die stand im
+            # Kessel und blieb dort stehen. Der Brauer hat nach dem
+            # Reset einen Kessel vorgefunden, der weiter auf 69 Grad
+            # heizt, ohne dass ein Schritt laeuft, der das verlangt.
+            #
+            # Nicht jeder Schritt hat einen Kessel (ein ChilStep wartet
+            # nur auf seinen Timer), darum wird der Kessel nur
+            # zurueckgesetzt, wenn der Schritt einen hat.
+            kettle = getattr(step, "kettle", None)
+            if kettle is not None:
+                try:
+                    cbpi.emit_event("SET_TARGET_TEMP", id=int(kettle), temp=0)
+                except Exception as e:
+                    cbpi.app.logger.error("Zieltemperatur des Kessels %s konnte "
+                                           "nicht zurueckgesetzt werden: %s" % (kettle, e))
 
     @route('/reset/current', methods=['POST'])
     def resetCurrentStep(self):
@@ -196,7 +219,11 @@ def init_after_startup():
             # step type not found. cant restart step
             return
 
-        cfg = step.stepstate.copy()
+        # Das stepstate kann NULL sein (der Schritt ist aktiv, hat aber
+        # noch keinen Zustand gespeichert). Ohne diese Absicherung
+        # bricht der ganze Start hier ab - und der laufende Schritt
+        # waere nach dem Neustart weg.
+        cfg = (step.stepstate or {}).copy()
         cfg.update(dict(api=cbpi, id=step.id, managed_fields=get_manged_fields_as_array(type_cfg)))
         instance = type_cfg.get("class")(**cfg)
         instance.init()
