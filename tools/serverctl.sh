@@ -155,6 +155,22 @@ running_pid() {
     return 1
 }
 
+# Die PID des Prozesses, der auf dem Port des Servers lauscht.
+#
+# Leer, wenn niemand auf dem Port lauscht.
+#
+# Das ist die Quelle der Wahrheit fuer "laeuft der Server": nicht die
+# PID-Datei und nicht die Prozessliste. Die PID-Datei kann falsch sein
+# (setsid forkt, siehe do_start), und in der Prozessliste kann ein
+# zweiter Server stehen, den jemand von Hand gestartet hat. Der Port
+# gehoert dem Server, der tatsaechlich antwortet.
+port_pid() {
+    ss -ltnpH "sport = :$PORT" 2>/dev/null \
+        | grep -o 'pid=[0-9]\+' \
+        | head -1 \
+        | cut -d= -f2
+}
+
 # --- Befehle ---------------------------------------------------------------
 
 do_start() {
@@ -171,6 +187,26 @@ do_start() {
         return 1
     fi
 
+    # Ist der Port schon belegt, laeuft der Server - nur nicht unter
+    # diesem Skript. Das ist der Normalfall, wenn der Server von Hand
+    # in einem Terminal gestartet wurde.
+    #
+    # Vorher hat das Skript hier blind gestartet. Die zweite Instanz
+    # konnte den Port nicht belegen und starb mit "Address already in
+    # use" - das Skript meldete aber trotzdem Erfolg, weil es nur
+    # pruefte, ob *irgendetwas* auf dem Port lauscht. Zwei Instanzen
+    # gleichzeitig, und die eine davon beantwortete die Anfragen, waehrend
+    # die andere im Log einen Fehler hinterliess.
+    local belegt
+    belegt="$(port_pid)"
+    if [ -n "$belegt" ]; then
+        err "Der Port $PORT ist bereits belegt (PID $belegt)."
+        info "Es laeuft bereits ein CraftBeerPi - der Start wird abgebrochen."
+        info "Beenden mit './tools/serverctl.sh stop' und erneut starten,"
+        info "oder den laufenden Server weiter benutzen."
+        return 1
+    fi
+
     mkdir -p "$ROOT/logs" || return 1
 
     say "CraftBeerPi wird gestartet (Port $PORT) ..."
@@ -181,15 +217,21 @@ do_start() {
     # ueberschrieben wird.
     setsid nohup "$PYTHON" "$RUNSCRIPT" >>"$LOGFILE" 2>&1 &
     local new_pid=$!
-    echo "$new_pid" >"$PIDFILE"
 
     # Warten, bis der Port wirklich lauscht. Der Import von "modules"
     # dauert je nach Hardware ein paar Sekunden.
     local waited=0
     local max_wait=40
     while [ "$waited" -lt "$max_wait" ]; do
-        if ss -ltnH "sport = :$PORT" 2>/dev/null | grep -q .; then
-            say "Server laeuft (PID $new_pid, Port $PORT)."
+        local pid_vom_port
+        pid_vom_port="$(port_pid)"
+        if [ -n "$pid_vom_port" ]; then
+            # setsid forkt, wenn es schon Prozessgruppenchef ist - dann
+            # ist $! nicht die PID des Servers, sondern die des
+            # setsid-Prozesses, der gleich wieder wegspringt. Die PID
+            # holen wir uns deshalb aus dem Port, den der Server belegt.
+            echo "$pid_vom_port" >"$PIDFILE"
+            say "Server laeuft (PID $pid_vom_port, Port $PORT)."
             info "Log: $LOGFILE"
             return 0
         fi
@@ -213,7 +255,15 @@ do_stop() {
     local force="${1:-}"
     local pid
 
-    if ! pid="$(running_pid)"; then
+    # Der Prozess, der auf dem Port lauscht, ist der Server, den man
+    # beenden will - auch wenn er von Hand in einem Terminal gestartet
+    # wurde und die PID-Datei something falsches nennt.
+    pid="$(port_pid)"
+    if [ -z "$pid" ]; then
+        pid="$(running_pid)"
+    fi
+
+    if [ -z "$pid" ]; then
         say "Der Server laeuft nicht."
         rm -f "$PIDFILE"
         return 0
@@ -266,14 +316,12 @@ do_stop() {
 
 do_status() {
     local pid
-    if pid="$(running_pid)"; then
+    # Der Port sagt die Wahrheit: wer da lauscht, ist der Server.
+    pid="$(port_pid)"
+    if [ -n "$pid" ]; then
         say "CraftBeerPi laeuft (PID $pid)."
         info "Port: $PORT"
-        if ss -ltnH "sport = :$PORT" 2>/dev/null | grep -q .; then
-            info "Der Port $PORT lauscht."
-        else
-            info "Der Port $PORT lauscht NOCH NICHT - der Server startet noch."
-        fi
+        info "Der Port $PORT lauscht."
     else
         say "CraftBeerPi laeuft nicht."
         info "Port: $PORT"
