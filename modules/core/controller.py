@@ -1,4 +1,5 @@
 from modules import cbpi
+from modules.core.props import apply_property_defaults
 
 
 class ActorController(object):
@@ -67,6 +68,14 @@ class ControllerBase(object):
         self.api = kwds.get("api")
         self.heater = kwds.get("heater")
         self.sensor = kwds.get("sensor")
+
+        # Die Konfigurationsfelder des Controllers sind als Property-
+        # Objekte als Klassenattribut hinterlegt. Was die Konfiguration
+        # nicht liefert, bekommt hier seinen Vorgabewert - sonst rechnet
+        # der Controller mit einem Property-Objekt statt mit einer Zahl
+        # und stirbt sofort an einem TypeError.
+        # Siehe modules.core.props.apply_property_defaults.
+        apply_property_defaults(self, kwds)
 
 
     def run(self):

@@ -237,7 +237,8 @@ class FermenterView(BaseView):
         except Exception as e:
             cbpi.app.logger.error("Umschalten des Fermenters %s fehlgeschlagen: %s: %s"
                                    % (id, type(e).__name__, e))
-            cbpi.notify("Toogle Fementer Controller failed", "Pleae check the %s configuration" % fermenter.name,
+            cbpi.notify("Umschalten des Fermenters fehlgeschlagen",
+                        "Bitte die Konfiguration von %s pruefen" % fermenter.name,
                         type="danger", timeout=None)
             # Nie ein Flag stehen lassen fuer einen Controller, der nicht
             # laeuft.
@@ -289,6 +290,16 @@ class FermenterView(BaseView):
             except Exception as e:
                 cbpi.app.logger.error("Controller des Fermenters %s ist gescheitert: %s: %s"
                                        % (getattr(fermenter, "id", "?"), type(e).__name__, e))
+                # Der Brauer sieht im Log nichts. Ohne Meldung auf dem
+                # Bildschirm bleibt der Knopf auf Handbetrieb und es sieht
+                # aus, als waere der Knopf kaputt.
+                try:
+                    cbpi.notify("Fermenter-Controller beendet",
+                                "Der Controller von %s ist mit einem Fehler "
+                                "ausgestiegen: %s" % (getattr(fermenter, "name", "?"), e),
+                                type="danger", timeout=None)
+                except Exception:
+                    pass
             finally:
                 self._clear_running(fermenter)
 

@@ -18,10 +18,38 @@ class Hysteresis(FermenterController):
         self.cooler_off()
 
     def run(self):
+        gemeldet = False
+
         while self.is_running():
 
             target_temp = self.get_target_temp()
             temp = self.get_temp()
+
+            if temp is None or target_temp is None:
+                # Kein Sensorwert. Das passiert, wenn der Sensor (z. B. ein
+                # MQTT-Sensor) noch keine Daten bekommen hat oder falsch
+                # konfiguriert ist.
+                #
+                # Vorher ist der Controller hier gestorben:
+                #     None + float(...) -> TypeError
+                # Der Fermenter fiel damit auf Handbetrieb zurueck, ohne
+                # dass der Brauer einen Grund gesehen haette - der Knopf
+                # "Auto" hat einfach nichts getan. Jetzt wird der Zyklus
+                # nur uebersprungen; der Controller laeuft weiter und
+                # schaltet, sobald ein Wert da ist.
+                if not gemeldet:
+                    gemeldet = True
+                    try:
+                        cbpi.app.logger.warning(
+                            "Fermenter %s: noch kein Sensorwert - der "
+                            "Controller wartet auf den Sensor"
+                            % getattr(self, "fermenter_id", "?"))
+                    except Exception:
+                        pass
+                self.sleep(1)
+                continue
+
+            gemeldet = False
 
             if temp + float(self.heater_offset_min) <= target_temp:
                 self.heater_on(100)

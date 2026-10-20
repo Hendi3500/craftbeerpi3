@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 
+from modules.core.props import apply_property_defaults
+
+
 class Base(object):
     __dirty = False
 
@@ -29,6 +32,12 @@ class Base(object):
         self.id = kwds.get("id")
         self.value = None
         self.__dirty = False
+
+        # Konfigurationsfelder, die die Konfiguration nicht liefert,
+        # bekommen ihren Vorgabewert. Ein Sensor ohne Topic ist dann
+        # wenigstens ein leerer Topic und kein Property-Objekt.
+        # Siehe modules.core.props.apply_property_defaults.
+        apply_property_defaults(self, kwds)
 
     def __setattr__(self, name, value):
 
