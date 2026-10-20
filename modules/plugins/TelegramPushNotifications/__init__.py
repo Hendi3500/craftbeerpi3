@@ -165,7 +165,7 @@ def _parameter_anlegen():
          "Telegram Bot Token (von @BotFather)"),
         (PARAM_CHAT, "", "text",
          "Telegram Chat ID - mehrere durch Komma trennen"),
-        (PARAM_STARTUP, "YES", "yesno",
+        (PARAM_STARTUP, "NO", "yesno",
          "Beim Start des Backends eine Testnachricht an Telegram schicken"),
     ):
         if name in vorhanden:

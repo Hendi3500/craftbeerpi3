@@ -79,9 +79,9 @@ CREATE TABLE IF NOT EXISTS config
 );
 
 
-INSERT OR IGNORE INTO config VALUES ('kettle_cols', 4, 'select', 'Adjust the width of a kettle widget on the brewing dashboard', '[1,2,3, 4, 5, 6, 7, 8, 9, 10, 11, 12]');
-INSERT OR IGNORE INTO config VALUES ('actor_cols', 4, 'select', 'Adjust the width of a actor widget on the brewing dashboard', '[1,2,3, 4, 5, 6, 7, 8, 9, 10, 11, 12]');
-INSERT OR IGNORE INTO config VALUES ('sensor_cols', 4, 'select', 'Adjust the width of a sensor widget on the brewing dashboard', '[1,2,3, 4, 5, 6, 7, 8, 9, 10, 11, 12]');
+INSERT OR IGNORE INTO config VALUES ('kettle_cols', 6, 'select', 'Adjust the width of a kettle widget on the brewing dashboard', '[1,2,3, 4, 5, 6, 7, 8, 9, 10, 11, 12]');
+INSERT OR IGNORE INTO config VALUES ('actor_cols', 6, 'select', 'Adjust the width of a actor widget on the brewing dashboard', '[1,2,3, 4, 5, 6, 7, 8, 9, 10, 11, 12]');
+INSERT OR IGNORE INTO config VALUES ('sensor_cols', 6, 'select', 'Adjust the width of a sensor widget on the brewing dashboard', '[1,2,3, 4, 5, 6, 7, 8, 9, 10, 11, 12]');
 INSERT OR IGNORE INTO config VALUES ('unit', 'C', 'select', 'Temperature Unit', '["C","F"]');
 INSERT OR IGNORE INTO config VALUES ('brewery_name', 'My Home Brewery', 'text', 'Your brewery name', NULL );
 INSERT OR IGNORE INTO config VALUES ('buzzer', 16, 'select', 'Buzzer GPIO', '[16,17,18,19,20,21,22,23]');
