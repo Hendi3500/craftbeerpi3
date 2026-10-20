@@ -5,6 +5,15 @@ craftbeerpi.db
 *.pyc
 *.templog
 
+# PID-Datei des Servers, die tools/serverctl.sh schreibt. Sie gehoert zum
+# laufenden Betrieb und nicht ins Repository.
+logs/server.pid
+
+# PID-Datei des Server-Verwaltungsskripts (tools/serverctl.sh). Sie
+# enthaelt die Prozess-ID des laufenden Servers und gehoert nicht ins
+# Repository - auf einem anderen Rechner ist sie falsch.
+logs/server.pid
+
 # virtualenv, in das install.sh die Pakete legt
 .venv/
 venv/

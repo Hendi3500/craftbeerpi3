@@ -38,6 +38,50 @@ UPDATE config SET value = '8080' WHERE name = 'port';
 
 Ohne diesen Eintrag gilt `5000`.
 
+### Server verwalten
+
+`tools/serverctl.sh` startet und beendet den Server im Hintergrund, legt
+die PID-Datei unter `logs/server.pid` ab und schreibt das Log nach
+`logs/server.log`:
+
+```bash
+./tools/serverctl.sh start     # starten (im Hintergrund)
+./tools/serverctl.sh stop      # beenden
+./tools/serverctl.sh restart   # neu starten
+./tools/serverctl.sh status    # Zustand anzeigen
+```
+
+Der Port wird aus der Konfiguration gelesen, muss also nirgends im
+Skript gepflegt werden. Der Server läuft unter dem virtualenv
+(`.venv/bin/python`) — mit dem System-Python startet er nicht.
+
+**Der Stopp wird während eines Brauschritts verweigert.** Der PID-Regler,
+der die Heizung steuert, läuft im Serverprozess; beendet man ihn, heizt
+der Kessel weiter, ohne geregelt zu werden. Wer den Server trotzdem
+beenden will, muss es ausdrücklich sagen:
+
+```bash
+./tools/serverctl.sh stop --force
+```
+
+Dasselbe gilt für `POST /api/restart` — der Endpunkt antwortet in dem
+Fall mit HTTP 409.
+
+### T3-Code-Aktion
+
+Im Projekt liegt die Aktion `.opencode/commands/server.md`. Sie ist in
+T3 Code als `/server` verfügbar und wird im Chat aufgerufen:
+
+```text
+/server start
+/server stop
+/server status
+```
+
+Die Aktion ruft `tools/serverctl.sh` auf. Kommt bei `stop` die
+Meldung über den laufenden Brauschritt, fragt die Aktion nach, statt
+selbst mit `--force` nachzusetzen.
+
 ## Voraussetzungen
 
 | | |
