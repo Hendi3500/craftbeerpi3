@@ -135,11 +135,16 @@ Setup mehr außer dem Broker-Eintrag unter *Konfiguration → MQTT*:
 
 | Feld | Bedeutung |
 |---|---|
-| `MQTT_SERVER` | Hostname oder IP, Standard `localhost` |
-| `MQTT_PORT` | Standard `1883` |
-| `MQTT_USERNAME` / `MQTT_PASSWORD` | leer lassen für anonymen Zugriff |
-| `MQTT_TLS` | `true` schaltet TLS ein |
-| `MQTT_CA_CERT` / `MQTT_CERT` / `MQTT_KEY` | optionale Pfade für TLS |
+| `mqtt_server` | Hostname oder IP, Standard `localhost` |
+| `mqtt_port` | Standard `1883` |
+| `mqtt_username` / `mqtt_password` | leer lassen für anonymen Zugriff |
+| `mqtt_tls` | Auswahlfeld `YES` / `NO` |
+| `mqtt_ca_cert` / `mqtt_cert` / `mqtt_key` | optionale Pfade für TLS |
+
+Die Parameter heißen klein wie die übrigen Parameter von CraftBeerPi 3
+(`unit`, `brewery_name`, `setup`, `port`). Sie hießen früher
+`MQTT_SERVER`, `MQTT_TLS` und so weiter; die vorhandene Konfiguration wird
+beim Update automatisch übernommen.
 
 Die Verbindung kommt automatisch zustande und wird bei einem Broker-Neustart
 von selbst wieder aufgebaut; die Abos werden dabei erneut gesetzt. Es gibt

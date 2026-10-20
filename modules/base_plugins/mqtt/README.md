@@ -43,14 +43,24 @@ A nice MQTT test client is mqtt.fx http://www.mqttfx.org/
 
 ## Broker connection
 
-- `MQTT_SERVER` - hostname or IP of the broker, default `localhost`
-- `MQTT_PORT` - default `1883`
-- `MQTT_USERNAME` / `MQTT_PASSWORD` - leave empty for anonymous access
-- `MQTT_TLS` - `true` enables TLS
-- `MQTT_CA_CERT`, `MQTT_CERT`, `MQTT_KEY` - optional paths for TLS. With
-  `MQTT_TLS` enabled and no paths given, the system trust store is used.
-  Certificate verification stays active - there is deliberately no "insecure"
-  switch.
+- `mqtt_server` - hostname or IP of the broker, default `localhost`
+- `mqtt_port` - default `1883`
+- `mqtt_username` / `mqtt_password` - leave empty for anonymous access
+- `mqtt_tls` - selection field with the options `YES` and `NO`
+- `mqtt_ca_cert`, `mqtt_cert`, `mqtt_key` - optional paths for TLS. With
+  `mqtt_tls` set to `YES` and no paths given, the system trust store is
+  used. Certificate verification stays active - there is deliberately no
+  "insecure" switch.
+
+The parameter names are lower case, like the other parameters of
+CraftBeerPi 3 (`unit`, `brewery_name`, `setup`, `port`). They used to be
+called `MQTT_SERVER`, `MQTT_PORT` and so on. The existing configuration is
+taken over automatically - by the migration `update/5_mqtt_config.sql` and
+by the plugin itself, if the migration did not run.
+
+`mqtt_tls` used to be a text field with `true`/`false`. A text field is the
+wrong place for that: every non-empty string is truthy, so TLS stayed
+enabled even with `false` in it. It is a selection field now.
 
 The connection is established in the background and reconnects automatically.
 All topic subscriptions are restored after a reconnect, so a restarted broker

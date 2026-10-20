@@ -30,6 +30,26 @@ Gegenueber der Python-2-Fassung (2018) geaendert:
 
 Die Topics und die Sensorkonfiguration im Broker aendern sich durch den Port
 nicht, bestehende Konfigurationen bleiben gueltig.
+
+Die Config-Parameter
+--------------------
+Die Parameter heissen klein geschrieben::
+
+    mqtt_server, mqtt_port, mqtt_username, mqtt_password,
+    mqtt_tls, mqtt_ca_cert, mqtt_cert, mqtt_key
+
+Damit passen sie zu den uebrigen Parametern von CraftBeerPi 3 (unit,
+brewery_name, setup, port, altitude). Die frueheren GROSSBUCHSTABEN
+(MQTT_SERVER, MQTT_TLS, ...) sind umgezogen; die vorhandene
+Konfiguration geht dabei nicht verloren: die Migration
+``update/5_mqtt_config.sql`` benennt die Eintraege in der Datenbank um,
+und das Plugin nimmt die alten Werte selbst mit, falls die Migration
+nicht gelaufen ist.
+
+``mqtt_tls`` ist ein Auswahlfeld mit den Optionen ``YES`` und ``NO`` -
+kein Freitext. "true"/"false" im Textfeld waren die haeufigste
+Fehlerquelle: jedes nicht-leere Zeichenfeld ist truthy, TLS waere also
+dauerhaft aktiv und der Broker gar nicht erreichbar.
 """
 
 import json
@@ -57,12 +77,22 @@ def _as_bool(value, default=False):
     bei "false" immer wahr, weil jeder nicht-leere String truthy ist - TLS
     waere also dauerhaft aktiv und der Broker wuerde nie erreichbar. Deshalb
     wird hier bewusst geparst statt auf Truthiness geprueft.
+
+    Das Auswahlfeld liefert "YES"/"NO", die aelteren Textfelder
+    "true"/"false". Beides wird verstanden, damit eine Konfiguration, die
+    noch aus der Zeit vor dem Auswahlfeld stammt, nicht plötzlich das
+    Gegenteil bedeutet.
     """
     if isinstance(value, bool):
         return value
     if value is None:
         return default
-    return str(value).strip().lower() in ("true", "1", "yes", "on", "y")
+    text = str(value).strip().lower()
+    if text in ("yes", "y", "true", "1", "on"):
+        return True
+    if text in ("no", "n", "false", "0", "off", ""):
+        return False
+    return default
 
 
 def _as_int(value, default, what="Wert"):
@@ -96,6 +126,183 @@ def _log():
     except Exception:
         import logging
         return logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Config-Parameter
+# ---------------------------------------------------------------------------
+# Klein geschrieben, wie die uebrigen Parameter von CraftBeerPi 3
+# (unit, brewery_name, setup, port, altitude). Die frueheren
+# GROSSBUCHSTABEN (MQTT_SERVER, MQTT_TLS, ...) sind umgezogen - siehe
+# _config_lesen und die Migration update/5_mqtt_config.sql.
+
+CONFIG_SERVER = "mqtt_server"
+CONFIG_PORT = "mqtt_port"
+CONFIG_USERNAME = "mqtt_username"
+CONFIG_PASSWORD = "mqtt_password"
+CONFIG_TLS = "mqtt_tls"
+CONFIG_CA_CERT = "mqtt_ca_cert"
+CONFIG_CERT = "mqtt_cert"
+CONFIG_KEY = "mqtt_key"
+
+# TLS ist ein Auswahlfeld, kein Freitext.
+TLS_OPTIONEN = ["YES", "NO"]
+
+# Die Namen, unter denen die Parameter bis zur Umbenennung in der
+# Datenbank standen. Beim Start wird der alte Wert uebernommen und der
+# alte Eintrag geloescht - die Konfiguration geht nicht verloren.
+_ALTE_NAMEN = {
+    CONFIG_SERVER: "MQTT_SERVER",
+    CONFIG_PORT: "MQTT_PORT",
+    CONFIG_USERNAME: "MQTT_USERNAME",
+    CONFIG_PASSWORD: "MQTT_PASSWORD",
+    CONFIG_TLS: "MQTT_TLS",
+    CONFIG_CA_CERT: "MQTT_CA_CERT",
+    CONFIG_CERT: "MQTT_CERT",
+    CONFIG_KEY: "MQTT_KEY",
+}
+
+
+def _config_lesen(cbpi_instance, name, default, description,
+                   typ="text", optionen=None):
+    """
+    Einen Config-Parameter lesen und - falls es ihn noch nicht gibt - anlegen.
+
+    Drei Faelle werden abgedeckt:
+
+    1. Es gibt nur den alten Parameter (MQTT_SERVER). Sein Wert wird
+       uebernommen, der neue Parameter wird mit diesem Wert angelegt und
+       der alte geloescht. So geht die Konfiguration beim Update nicht
+       verloren - der Broker waere sonst nicht mehr erreichbar, bis der
+       Brauer alles von Hand eingetragen hat.
+    2. Es gibt beide. Der neue gewinnt, der alte wird geloescht.
+    3. Es gibt keinen. Der Parameter wird mit dem Vorgabewert angelegt.
+
+    Ausserdem wird der Typ nachgezogen: steht der Parameter noch als
+    Textfeld in der Datenbank, rendert die Oberflaeche ihn auch dann als
+    Textfeld, wenn der Plugin doch schon ein Auswahlfeld erwartet.
+    """
+    cache = cbpi_instance.cache.get("config")
+    if cache is None:
+        # Der Config-Cache ist noch nicht da - dann gibt es auch keine
+        # Parameter, die man lesen koennte. Der Aufrufer bekommt den
+        # Vorgabewert, das Backend laeuft weiter.
+        _log().error("MQTT: Config-Cache ist nicht initialisiert - die "
+                     "MQTT-Parameter konnten nicht gelesen werden")
+        return default
+
+    eintrag = cache.get(name)
+    alter_name = _ALTE_NAMEN.get(name)
+    alter_eintrag = cache.get(alter_name) if alter_name else None
+
+    if eintrag is not None:
+        # Fall 2: der Parameter gibt es schon.
+        # Ein NULL in der Datenbank ist kein Wert - dann gilt der
+        # Vorgabewert, sonst waere der Broker nicht erreichbar.
+        wert = eintrag.value if eintrag.value is not None else default
+        _typ_setzen(cbpi_instance, name, typ, optionen)
+    else:
+        # Fall 1 oder 3: den Wert des alten Parameters uebernehmen,
+        # sonst den Vorgabewert.
+        if alter_eintrag is not None and alter_eintrag.value is not None:
+            wert = alter_eintrag.value
+        else:
+            wert = default
+        try:
+            cbpi_instance.add_config_parameter(name, wert, typ, description,
+                                               options=optionen)
+        except Exception as e:
+            # Ein Parameter, der sich nicht anlegen laesst, darf den
+            # Start des Backends nicht verhindern.
+            _log().error("MQTT: Config-Parameter %s konnte nicht angelegt "
+                         "werden: %s" % (name, e))
+
+    if alter_name:
+        # Der alte Eintrag stoert nur - die Oberflaeche zeigte beide
+        # Namen an, und der Brauer haette nicht gewusst, welcher gilt.
+        _parameter_loeschen(cbpi_instance, alter_name)
+
+    return wert
+
+
+def _typ_setzen(cbpi_instance, name, typ, optionen=None):
+    """
+    Den Typ eines Config-Parameters anpassen, falls er nicht passt.
+
+    Beispiel: mqtt_tls stand als Textfeld in der Datenbank. Die
+    Oberflaeche rendert den Parameter dann als Textfeld - egal, was der
+    Plugin im Code erwartet. "false" einzutippen war damit die einzige
+    Moeglichkeit, TLS auszuschalten, und ein leeres Feld bedeutet
+    "truthy", also "TLS an".
+    """
+    from modules.config import Config
+
+    cache = cbpi_instance.cache.get("config") or {}
+    eintrag = cache.get(name)
+    if eintrag is None:
+        return
+
+    if eintrag.type == typ and (eintrag.options or []) == (optionen or []):
+        return
+
+    try:
+        with cbpi_instance.app.app_context():
+            eintrag.__dict__.update({"type": typ, "options": optionen})
+            Config.update(**eintrag.__dict__)
+        _log().info("MQTT: Config-Parameter %s hat jetzt den Typ '%s'"
+                    % (name, typ))
+    except Exception as e:
+        _log().error("MQTT: Typ des Config-Parameters %s konnte nicht "
+                     "geaendert werden: %s" % (name, e))
+
+
+def _parameter_loeschen(cbpi_instance, name):
+    """
+    Einen Config-Parameter aus der Datenbank und aus dem Cache entfernen.
+
+    Wird fuer die alten GROSSBUCHSTABEN-Parameter gebraucht.
+    """
+    from modules.config import Config
+
+    cache = cbpi_instance.cache.get("config") or {}
+    if name not in cache:
+        return
+
+    try:
+        with cbpi_instance.app.app_context():
+            Config.delete(name)
+        cache.pop(name, None)
+        _log().info("MQTT: Der alte Config-Parameter %s wurde entfernt"
+                    % name)
+    except Exception as e:
+        _log().error("MQTT: Der alte Config-Parameter %s konnte nicht "
+                     "entfernt werden: %s" % (name, e))
+
+
+def _tls_lesen(cbpi_instance):
+    """
+    Den TLS-Parameter lesen und auf YES/NO bringen.
+
+    Der Wert kann noch aus der Zeit vor dem Auswahlfeld stammen
+    ("true"/"false"). Ein Auswahlfeld, dessen Wert nicht in den Optionen
+    steht, zeigt gar nichts an - der Brauer wuerde nicht sehen, ob TLS
+    an ist. Der alte Wert wird deshalb umgestellt und zurueckgeschrieben.
+    """
+    roh = _config_lesen(cbpi_instance, CONFIG_TLS, "NO", "MQTT TLS",
+                        "select", TLS_OPTIONEN)
+    neu = "YES" if _as_bool(roh) else "NO"
+
+    if str(roh).strip().upper() != neu:
+        try:
+            with cbpi_instance.app.app_context():
+                cbpi_instance.set_config_parameter(CONFIG_TLS, neu)
+            _log().info("MQTT: TLS-Parameter von '%s' auf '%s' umgestellt"
+                        % (roh, neu))
+        except Exception as e:
+            _log().error("MQTT: TLS-Parameter konnte nicht gespeichert "
+                         "werden: %s" % e)
+
+    return neu
 
 
 class MQTTBroker:
@@ -599,26 +806,26 @@ def initMQTT(cbpi_instance):
     (siehe CraftBeerPi.run_init).
     """
 
-    def config(name, default, description):
-        value = cbpi_instance.get_config_parameter(name, None)
-        if value is None:
-            cbpi_instance.add_config_parameter(name, default, "text", description)
-            return default
-        return value
-
-    server = config("MQTT_SERVER", "localhost", "MQTT Server")
-    port = config("MQTT_PORT", "1883", "MQTT Server Port")
-    username = config("MQTT_USERNAME", "", "MQTT username")
-    password = config("MQTT_PASSWORD", "", "MQTT password")
-    tls = config("MQTT_TLS", "false", "MQTT TLS")
-    ca_cert = config("MQTT_CA_CERT", "", "MQTT TLS CA Zertifikat (Pfad)")
-    cert = config("MQTT_CERT", "", "MQTT TLS Client Zertifikat (Pfad)")
-    key = config("MQTT_KEY", "", "MQTT TLS Client Key (Pfad)")
+    server = _config_lesen(cbpi_instance, CONFIG_SERVER, "localhost",
+                           "MQTT Server")
+    port = _config_lesen(cbpi_instance, CONFIG_PORT, "1883",
+                         "MQTT Server Port", "number")
+    username = _config_lesen(cbpi_instance, CONFIG_USERNAME, "",
+                              "MQTT username")
+    password = _config_lesen(cbpi_instance, CONFIG_PASSWORD, "",
+                              "MQTT password")
+    tls = _tls_lesen(cbpi_instance)
+    ca_cert = _config_lesen(cbpi_instance, CONFIG_CA_CERT, "",
+                            "MQTT TLS CA Zertifikat (Pfad)")
+    cert = _config_lesen(cbpi_instance, CONFIG_CERT, "",
+                         "MQTT TLS Client Zertifikat (Pfad)")
+    key = _config_lesen(cbpi_instance, CONFIG_KEY, "",
+                        "MQTT TLS Client Key (Pfad)")
 
     # Der Broker darf den Start des Backends nicht verhindern.
     #
     # Vorher stand hier kein try/except. Ein Tippfehler in der
-    # Konfiguration - "MQTT_PORT" auf "abc", ein nicht existierender
+    # Konfiguration - "mqtt_port" auf "abc", ein nicht existierender
     # Pfad fuer das TLS-Zertifikat - liess die Ausnahme bis nach oben
     # durch. run_init() (modules/core/core.py) ruft die Initialisierer
     # ohne Fehlerbehandlung auf, und run_init() laeuft beim Import von
