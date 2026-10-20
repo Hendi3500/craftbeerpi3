@@ -203,6 +203,56 @@ def _status():
     }
 
 
+def _sockets_unererbbar_machen():
+    """
+    Die Sockets dieses Prozesses unererbbar machen.
+
+    Warum das noetig ist
+    -------------------
+    Der Werkzeug-Server setzt seinen Listening-Socket absichtlich auf
+    "inheritable" (werkzeug/serving.py: ``srv.socket.set_inheritable(True)``).
+    Er soll damit an einen Reloader-Kindprozess weitergegeben werden
+    koennen.
+
+    Beim ``execv`` erbt das neue Prozessbild diesen Socket deshalb
+    auch - und startet mit einem Port, der bereits gebunden ist. Der
+    zweite Bind des neuen Servers schlaegt mit "Address already in use"
+    fehl, das Backend beendet sich und das Ergebnis ist: **kein
+    Prozess, kein Port, keine Oberflaeche**. Der Neustart-Knopf hat das
+    Backend damit abgeschossen, statt es neu zu starten - und wer es
+    nicht bemerkte, hat ein totes System vor sich.
+
+    Deshalb werden die Sockets vor dem Wechsel des Prozessbildes
+    unererbbar gemacht. Der Kernel schliesst sie dann beim execv, und
+    der neue Prozess bindet den Port von Grund auf.
+
+    :return: Die Anzahl der umgestellten Deskriptoren.
+    """
+    geaendert = 0
+
+    try:
+        pfad = "/proc/self/fd"
+        for name in os.listdir(pfad):
+            try:
+                fd = int(name)
+                if not os.readlink(os.path.join(pfad, name)).startswith("socket:"):
+                    continue
+                if not os.get_inheritable(fd):
+                    continue
+                os.set_inheritable(fd, False)
+                geaendert += 1
+            except (OSError, ValueError):
+                # Der Deskriptor kann zwischen dem Listing und dem
+                # Zugriff verschwunden sein - dann ist er aber auch
+                # nicht mehr zu erben.
+                continue
+    except Exception as e:
+        logger.warning("BackendRestart: Sockets konnten nicht unererbbar "
+                       "gemacht werden: %s" % e)
+
+    return geaendert
+
+
 def _execute(delay):
     """
     Warten, dann dieses Prozess-Image durch ein frisches Backend ersetzen.
@@ -247,6 +297,13 @@ def _execute(delay):
                 handler.flush()
             except Exception:
                 pass
+
+        # Der Listening-Socket darf nicht in das neue Prozessbild
+        # geerbt werden - sonst kann der neue Server den Port nicht
+        # binden und das Backend steht nicht mehr. Siehe
+        # _sockets_unererbbar_machen().
+        anzahl = _sockets_unererbbar_machen()
+        logger.info("BackendRestart: %d Socket(s) unererbbar gemacht" % anzahl)
 
         # Ab hier kehrt nichts zurueck. Die PID bleibt gleich, damit die
         # PID-Datei des Init-Skripts gueltig bleibt.

@@ -140,7 +140,14 @@ def run():
         check("Handshake meldet EIO 4", payload.get("sid") is not None, str(payload)[:80])
         check("Ping-Intervall uebermittelt", "pingInterval" in payload, str(list(payload)))
         check("maxPayload begrenzt die Nutzlast", "maxPayload" in payload, str(list(payload)))
-        check("WebSocket-Upgrade angeboten", "websocket" in payload.get("upgrades", []),
+        # Kein WebSocket-Upgrade anbieten. Der Werkzeug-Server kann den
+        # Upgrade nicht bedienen (400), und socket.io-client 4 beendet
+        # danach die Verbindung endgueltig - der Manager setzt
+        # skipReconnect und kommt nicht wieder. Die Oberflaeche haengt
+        # dann dauerhaft ohne Live-Daten da. Der Client bleibt auf
+        # Polling, das der Server kann.
+        check("kein WebSocket-Upgrade angeboten",
+              "websocket" not in payload.get("upgrades", []),
               str(payload.get("upgrades")))
     except Exception as e:
         check("Handshake auswertbar", False, "%s: %s" % (type(e).__name__, e))

@@ -234,6 +234,24 @@ def run():
     print("\n--- /api/restart ----------------------------------------------")
     import modules.restart as restart_modul
 
+    # Die Sockets unererbbar machen: sonst erbt das neue Prozessbild den
+    # Listening-Socket des Werkzeug-Servers und der neue Server kann den
+    # Port nicht binden - das Backend steht dann nicht mehr.
+    # Siehe _sockets_unererbbar_machen() in modules/restart/__init__.py.
+    import socket as _socket
+    probe = _socket.socket()
+    try:
+        probe.bind(("127.0.0.1", 0))
+        os.set_inheritable(probe.fileno(), True)
+        check("der Test-Socket ist ererbbar (Ausgangslage)",
+              os.get_inheritable(probe.fileno()) is True)
+        anzahl = restart_modul._sockets_unererbbar_machen()
+        check("der Socket ist danach unererbbar",
+              os.get_inheritable(probe.fileno()) is False)
+        check("die Aenderung wird gemeldet", anzahl >= 1, repr(anzahl))
+    finally:
+        probe.close()
+
     r = client.get("/api/restart")
     check("GET /api/restart antwortet 200", r.status_code == 200,
           "Status %s" % r.status_code)

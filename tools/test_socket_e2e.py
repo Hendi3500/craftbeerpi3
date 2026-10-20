@@ -104,7 +104,12 @@ def run():
     check("Client verbindet sich", client.connected)
     check("beide Namespaces verbunden",
           set(client.namespaces) == {"/", "/brew"}, str(list(client.namespaces)))
-    check("Transport ist WebSocket", client.transport() == "websocket",
+    # Polling, nicht WebSocket: der Werkzeug-Server kann den
+    # WebSocket-Upgrade nicht bedienen. Bietet der Server ihn an,
+    # versucht der Client ihn, bekommt 400 und beendet die Verbindung
+    # endgueltig - ohne reconnect. Siehe allow_upgrades=False in
+    # modules/app_config.py.
+    check("Transport ist Polling", client.transport() == "polling",
           client.transport())
 
     time.sleep(0.5)
