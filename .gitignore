@@ -36,6 +36,14 @@ modules/plugins/*
 !modules/plugins/CascadeControl/
 !modules/plugins/CascadeControl/**
 
+# Und fuer TelegramPushNotifications: die Telegram-Anbindung ist im
+# Betrieb gesetzt und soll einen Neucheckout ueberleben. Sie ist eine
+# lokal ueberarbeitete Fassung von ShintoTuna/cbpi-telegram (die
+# Vorlage laeuft nicht unter Python 3) - deshalb liegt sie im Repo und
+# nicht nur als heruntergeladenes Plugin.
+!modules/plugins/TelegramPushNotifications/
+!modules/plugins/TelegramPushNotifications/**
+
 *.pyc
 *.js
 *.css
