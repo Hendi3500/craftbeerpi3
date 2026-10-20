@@ -32,9 +32,25 @@ FORMAT = '%(asctime)-15s - %(levelname)s - %(message)s'
 # Start, ohne die Datenbank anzufassen.
 LOG_LEVEL = os.environ.get("CBPI_LOG_LEVEL", "INFO").strip().upper()
 
-logging.basicConfig(filename='./logs/app.log',
-                    level=getattr(logging, LOG_LEVEL, logging.INFO),
-                    format=FORMAT)
+# Wohin das Log geschrieben wird: in die Datei (Normalfall) oder in
+# den Bildschirm. Im Entwicklungsmodus (run_dev.py) ist der Bildschirm
+# gewuenscht - das Log steht ohne Umweg neben der Serverausgabe, und
+# das Logfile des laufenden Servers bleibt unberuehrt.
+#
+#     CBPI_LOG_STDOUT=1 .venv/bin/python run.py
+#
+LOG_TO_STDOUT = os.environ.get("CBPI_LOG_STDOUT", "").strip().lower() \
+    in ("1", "true", "yes", "on")
+
+if LOG_TO_STDOUT:
+    logging.basicConfig(stream=sys.stdout,
+                        level=getattr(logging, LOG_LEVEL, logging.INFO),
+                        format=FORMAT)
+else:
+    logging.basicConfig(filename='./logs/app.log',
+                        level=getattr(logging, LOG_LEVEL, logging.INFO),
+                        format=FORMAT)
+
 app.config['SECRET_KEY'] = 'craftbeerpi'
 app.config['UPLOAD_FOLDER'] = './upload'
 

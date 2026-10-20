@@ -62,6 +62,45 @@ startet den Server als Kindprozess, und der Neustart-Mechanismus des
 Backends (`POST /api/restart`) ersetzt das Prozessbild per `execv` –
 beides verträgt sich nicht mit einem Reloader.
 
+### Entwicklungsmodus
+
+Für die Arbeit am Code: Server starten und bei jeder Änderung neu
+starten.
+
+```bash
+./run_dev.py
+```
+
+Der Server läuft als Kindprozess im Vordergrund, seine Ausgaben stehen
+im Terminal. Wird eine Quelldatei geändert, beendet sich der Server und
+startet neu — mit dem Code, der gerade auf der Platte liegt. Beenden
+mit `Strg+C`.
+
+Beobachtet werden alle `.py-`, `.sql-`, `.html-` und `.yaml`-Dateien
+unter `modules/` und `update/` sowie `run.py` und `config/schema.sql`.
+Nicht beobachtet werden `__pycache__/`, `logs/`, das gebaute
+Frontend-Bundle (`modules/ui/static/`) und die Datenbank — sonst würde
+der Server endlos neu starten.
+
+| Option | Bedeutung |
+|---|---|
+| `--port PORT` | Port des Servers. Ohne die Option gilt der Port aus der Datenbank. Praktisch, wenn neben dem laufenden Server entwickelt wird: `./run_dev.py --port 5000` |
+| `--log-level LVL` | Log-Level. Vorgabe ist `DEBUG` |
+| `--no-restart` | Nur starten, nichts beobachten |
+
+Alternativ über die Umgebung: `CBPI_PORT=5000 ./run_dev.py` und
+`CBPI_LOG_LEVEL=INFO ./run_dev.py`.
+
+Im Entwicklungsmodus landet das Log **im Bildschirm**, nicht in
+`logs/app.log` — so steht alles nebeneinander, und das Logfile des
+laufenden Servers bleibt unberührt. Die Datei `logs/app.log` wird nur
+vom normal gestarteten Server beschrieben.
+
+Hinweis: Der Entwicklungsserver benutzt dieselbe Datenbank wie der
+laufende Server. Das betrifft den Port (deshalb `--port`) und die
+Migrationen — sie laufen beim Start und werden in der Datenbank
+vermerkt.
+
 ### Server verwalten
 
 `tools/serverctl.sh` startet und beendet den Server im Hintergrund, legt
