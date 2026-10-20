@@ -19,7 +19,22 @@ app = Flask(__name__)
 
 FORMAT = '%(asctime)-15s - %(levelname)s - %(message)s'
 
-logging.basicConfig(filename='./logs/app.log',level=logging.INFO, format=FORMAT)
+# Das Log-Level kommt aus der Umgebung, damit man das Backend auch im
+# Betrieb mit Debug starten kann, ohne den Code zu aendern:
+#
+#     CBPI_LOG_LEVEL=DEBUG .venv/bin/python run.py
+#
+# Ohne die Variable gilt INFO wie bisher. Ein unbekannter Wert wird
+# ignoriert (und nicht als Level gesetzt) - sonst waere ein Tippfehler
+# ein stiller Ausfall des Logs.
+#
+# CBPI_PORT arbeitet genauso: die Variable setzt den Port fuer den
+# Start, ohne die Datenbank anzufassen.
+LOG_LEVEL = os.environ.get("CBPI_LOG_LEVEL", "INFO").strip().upper()
+
+logging.basicConfig(filename='./logs/app.log',
+                    level=getattr(logging, LOG_LEVEL, logging.INFO),
+                    format=FORMAT)
 app.config['SECRET_KEY'] = 'craftbeerpi'
 app.config['UPLOAD_FOLDER'] = './upload'
 

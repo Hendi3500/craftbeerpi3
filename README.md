@@ -38,6 +38,30 @@ UPDATE config SET value = '8080' WHERE name = 'port';
 
 Ohne diesen Eintrag gilt `5000`.
 
+### Debug-Ausgaben
+
+Das Log landet in `logs/app.log`. Normalerweise steht dort nur, was
+wichtig ist (`INFO` und aufwärts). Zum Nachforschen lässt sich der
+Level über eine Umgebungsvariable erhöhen:
+
+```bash
+CBPI_LOG_LEVEL=DEBUG .venv/bin/python run.py
+```
+
+Möglich sind `DEBUG`, `INFO`, `WARNING`, `ERROR` — alles, was Python
+kennt. Ohne die Variable gilt `INFO`. Ein unbekannter Wert wird
+ignoriert, damit ein Tippfehler nicht das Log abschaltet.
+
+Achtung: auf `DEBUG` schreiben Flask, Werkzeug und Socket.IO jedes
+einzelne mit. Das Log wächst dadurch schnell – für den Betrieb also
+wieder auf `INFO` zurückgehen.
+
+Flask-eigener Debug-Modus (der interaktive Fehler-Inspektor und der
+automatische Reloader) ist davon getrennt und bleibt aus: der Reloader
+startet den Server als Kindprozess, und der Neustart-Mechanismus des
+Backends (`POST /api/restart`) ersetzt das Prozessbild per `execv` –
+beides verträgt sich nicht mit einem Reloader.
+
 ### Server verwalten
 
 `tools/serverctl.sh` startet und beendet den Server im Hintergrund, legt
