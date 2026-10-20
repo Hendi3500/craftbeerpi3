@@ -105,6 +105,29 @@ class SystemView(FlaskView):
         """
         repo = Repo('./')
 
+        # 0. Erst die Tags holen, dann pruefen.
+        #
+        # Die Reihenfolge war vorher umgekehrt: die Tag-Liste wurde
+        # gelesen, und der Fetch passierte erst spaeter, direkt vor dem
+        # Checkout. Ein Tag, der nur auf dem Remote existierte und
+        # noch nicht lokal geholt war, stand deshalb nicht in der
+        # Liste - der Endpunkt antwortete mit HTTP 404 "Unknown tag",
+        # obwohl der Tag sehr wohl existierte. Und der Fetch, der ihn
+        # geholt haette, kam eine halbe Funktion zu spaet.
+        #
+        # Der Fetch laeuft jetzt vor der Pruefung. Schlaegt er fehl
+        # (kein Remote, kein Netz), laeuft die Pruefung mit den lokal
+        # bekannten Tags weiter - ein lokaler Tag ist damit weiterhin
+        # auswählbar, und ein Remote-Tag ist nach dem naechsten
+        # erfolgreichen Fetch auch verfuegbar.
+        try:
+            o = repo.remotes.origin
+            o.fetch()
+        except Exception as e:
+            cbpi.app.logger.warning(
+                "Tags konnten nicht aktualisiert werden (%s) - es werden nur "
+                "die lokal bekannten Tags angeboten" % e)
+
         # 1. Nur existierende Tags zulassen
         try:
             tags = [t.name for t in repo.tags]
@@ -183,8 +206,8 @@ class SystemView(FlaskView):
 
         try:
             repo.git.reset('--hard')
-            o = repo.remotes.origin
-            o.fetch()
+            # Der Fetch passiert oben, vor der Tag-Pruefung - hier noch
+            # einmal zu holen wuerde nur Zeit kosten.
             g = Git('./')
             g.checkout(name)
         except Exception as e:

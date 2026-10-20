@@ -964,6 +964,26 @@ class RelayAutoTuner(object):
 
         # Amplitude has settled when the last peaks no longer grow.
         if inflection and self._peakCount > 4:
+            # Die Amplitude wird **neu berechnet**, nicht auf dem
+            # bisherigen Wert aufaddiert.
+            #
+            # Vorher stand hier kein Reset, der Wert wurde also ueber
+            # die Auswertungen hinweg akkumuliert. Gemessen in einer
+            # Kesselsimulation: Auswertung 1 ergab 0,3539 (korrekt),
+            # Auswertung 2 dann 0,4034 statt der frisch berechneten
+            # 0,3444 - ein Plus von 17 % auf den gemeldeten Ku.
+            #
+            # Das ist kein Verhalten der Arduino-Vorlage: dort ist die
+            # Amplitude eine lokale Variable, die bei jeder Auswertung
+            # neu gefuellt wird, und der direkte Vorfahre
+            # (cbpi4-PID_AutoTune) setzt die Amplitude vor der
+            # Auswertung ausdruecklich auf 0.
+            #
+            # Der Effekt war doppelt: die gemeldete Amplitude war zu
+            # gross, und das Konvergenzkriterium (deviation) wurde
+            # gegen einen zu grossen Wert geprueft - der Tuner meldete
+            # das "Settled" also frueher und zu Unrecht.
+            self._inducedAmplitude = 0.0
             absMax = self._peaks[-2]
             absMin = self._peaks[-2]
             for i in range(0, len(self._peaks) - 2):

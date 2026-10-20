@@ -96,14 +96,62 @@ def run():
 
     print("\n--- Sensor2: der konkrete Vorfall --------------------------")
     # Genau der Fall aus dem Log: eine Sensor-Id, die es nicht gibt.
-    r = client.delete("/api/sensor/2")
-    check("DELETE /api/sensor/2 (unbekannt) -> 404 statt 500",
+    #
+    # Wichtig: die Id wird **gesucht** und nicht fest eingetragen. Die
+    # Id-Vergabe in SQLite ist bei "id INTEGER PRIMARY KEY" ohne
+    # AUTOINCREMENT "max(id) + 1" - eine geloeschte Id wird also
+    # wieder vergeben. Legt ein anderer Testlauf einen Sensor an und
+    # bricht danach ab, liegt genau diese Id noch in der Datenbank, und
+    # der Test schlaegt fehl, obwohl der Kern genau richtig antwortet
+    # (die Id existiert, also ist 204 die richtige Antwort).
+    #
+    # Der Test sucht sich deshalb selbst eine Id, die es sicher nicht
+    # gibt, und raeumt die Reste eines abgebrochenen Laufs vorher weg.
+    import sqlite3 as _sqlite3
+
+    db_path = os.path.join(ROOT, "craftbeerpi.db")
+    belegte_ids = set()
+
+    try:
+        db = _sqlite3.connect(db_path)
+        db.row_factory = _sqlite3.Row
+        for tabelle, spalte in (("sensor", "id"), ("fermenter", "id")):
+            for row in db.execute("SELECT %s FROM %s" % (spalte, tabelle)):
+                belegte_ids.add(int(row[0]))
+        db.close()
+    except Exception:
+        pass
+
+    # Reste eines abgebrochenen Laufs entfernen: die Testobjekte
+    # heissen eindeutig, ein liegengebliebener Rest wird hier
+    # weggeraeumt, damit der Test nicht an ihm scheitert.
+    try:
+        db = _sqlite3.connect(db_path)
+        for tabelle in ("sensor", "fermenter"):
+            db.execute("DELETE FROM %s WHERE name LIKE 'IdTest%%'" % tabelle)
+        db.commit()
+        db.close()
+    except Exception:
+        pass
+
+    def _freie_id():
+        """Eine Id, die es in beiden Tabellen sicher nicht gibt."""
+        kandidat = 2
+        while kandidat in belegte_ids:
+            kandidat += 1
+        return kandidat
+
+    sensor_id = _freie_id()
+    r = client.delete("/api/sensor/%d" % sensor_id)
+    check("DELETE /api/sensor/%d (unbekannt) -> 404 statt 500" % sensor_id,
           r.status_code == 404, "Status %s" % r.status_code)
-    r = client.delete("/api/fermenter/1")
-    check("DELETE /api/fermenter/1 (unbekannt) -> 404 statt 500",
+
+    fermenter_id = _freie_id()
+    r = client.delete("/api/fermenter/%d" % fermenter_id)
+    check("DELETE /api/fermenter/%d (unbekannt) -> 404 statt 500" % fermenter_id,
           r.status_code == 404, "Status %s" % r.status_code)
-    r = client.put("/api/fermenter/1", json={"name": "X"})
-    check("PUT /api/fermenter/1 (unbekannt) -> 404 statt 500",
+    r = client.put("/api/fermenter/%d" % fermenter_id, json={"name": "X"})
+    check("PUT /api/fermenter/%d (unbekannt) -> 404 statt 500" % fermenter_id,
           r.status_code == 404, "Status %s" % r.status_code)
 
     print("\n--- Chart-Endpoint: unbekannte Id --------------------------")

@@ -82,12 +82,54 @@ def execute_file(current_version, data, conn):
     with open('./update/%s' % data["file"], 'r') as f:
         d = f.read()
     sqlCommands = d.split(";")
+
+    # Die Datei wird atomar angewendet: alle ihre Statements und der
+    # Eintrag in schema_info gehen gemeinsam in einen Savepoint.
+    # Passiert mitten in der Datei ein Fehler, wird der Savepoint
+    # zurueckgerollt - die Datei hat dann gar nichts bewirkt.
+    #
+    # Warum das noetig ist: die Connection hier ist die des
+    # Application-Contexts (``get_db()``), nicht eine eigene. Ohne
+    # Savepoint blieb nach einem Fehler eine offene Transaktion
+    # zurueck, in der die bis dahin ausgefuehrten Statements standen. Die
+    # *naechste* Migrationsdatei committete dann alles mit - auch den
+    # halb angewendeten Teil der fehlgeschlagenen Datei. Die Datenbank
+    # hatte damit einen Zustand, den keine der beiden Dateien
+    # beschreibt.
+    #
+    # In Python 2 lief jede Datei in einer eigenen Connection im
+    # ``with``-Block, und der Block rollte bei einem Fehler die ganze
+    # Datei zurueck. Diese Eigenschaft ist hier wiederhergestellt - ohne
+    # eine zweite Connection, damit die geteilte Transaktion des
+    # Application-Contexts intakt bleibt.
+    savepoint = "cbpi_migration_%s" % data["version"]
     cur = conn.cursor()
-    for s in sqlCommands:
-        if s.strip():
-            cur.execute(s)
-    cur.execute("INSERT INTO schema_info (version,filename) values (?,?)",
-                (data["version"], data["file"]))
+    cur.execute("SAVEPOINT %s" % savepoint)
+
+    try:
+        for s in sqlCommands:
+            if s.strip():
+                cur.execute(s)
+        cur.execute("INSERT INTO schema_info (version,filename) values (?,?)",
+                    (data["version"], data["file"]))
+    except Exception:
+        # Die Datei zurueckrollen. Der Savepoint wird aufgeloest, damit
+        # kein offener Savepoint liegen bleibt, aber die halbe Datei ist
+        # weg.
+        try:
+            cur.execute("ROLLBACK TO SAVEPOINT %s" % savepoint)
+        except sqlite3.Error:
+            # Der Rollback ist selbst fehlgeschlagen - dann bleibt nur
+            # die ganze Transaktion zurueckzuwerfen.
+            conn.rollback()
+        try:
+            cur.execute("RELEASE SAVEPOINT %s" % savepoint)
+        except sqlite3.Error:
+            pass
+        # Die Ausnahme wird nach oben durchgereicht und dort protokolliert.
+        raise
+
+    cur.execute("RELEASE SAVEPOINT %s" % savepoint)
     conn.commit()
     cbpi.app.logger.info("APPLIED DB FILE: %s" % data["file"])
     return True
