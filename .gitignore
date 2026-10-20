@@ -49,6 +49,16 @@ modules/plugins/*
 *.css
 modules/ui/package.json
 
+# Ausnahme: der Socket.IO-Client der alten Oberflaeche.
+#
+# Das alte bundle.js bringt einen Client der Version 2 mit, der das
+# Engine.IO-Protokoll 3 spricht - das Backend (python-socketio 5)
+# antwortet darauf mit 400, und die alte Oberflaeche hat keine
+# Live-Daten. Der Client der Version 4 wird deshalb als eigene Datei
+# dazugestellt und vor dem Bundle geladen; das Bundle benutzt ihn
+# statt des eigenen.
+!modules/ui/static/socket.io.min.js
+
 modules/ui/.babelrc
 yarn.lock
 

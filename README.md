@@ -195,9 +195,16 @@ Docker-Container). Der Server läuft weiter, nur der Piepton fehlt.
 Kein Raspberry Pi. Die Hardware-Plugins werden dann übersprungen.
 
 **Die Live-Anzeige im alten UI bleibt leer**
-Der Socket spricht Engine.IO 4, das alte `bundle.js` spricht Engine.IO 3
-und wird abgelehnt. Die REST-Schnittstelle ist davon nicht betroffen. Eine
-neue Oberfläche mit aktuellem `socket.io-client` ist der saubere Weg.
+Der Socket spricht Engine.IO 4. Das alte `bundle.js` bringt einen
+`socket.io-client` der Version 2 mit, der Engine.IO 3 spricht — der
+Handshake wird mit 400 abgelehnt, und die alte Oberfläche hat keine
+Live-Daten. Abhilfe: `modules/ui/static/socket.io.min.js` (Client
+Version 4) wird vor dem Bundle geladen, und das Bundle benutzt ihn
+statt des eigenen — eine Zeile im Bundle ist dafür angepasst
+(`(window.io||i.default).connect(...)`). Wird das Bundle neu gebaut,
+muss diese Anpassung wieder hinein. Die REST-Schnittstelle ist
+davon nicht betroffen. Die neue Oberfläche bringt ihren Client
+selbst mit und braucht nichts davon.
 
 **Ein Endpunkt antwortet mit 500**
 `logs/app.log` nennt den Endpunkt und den Traceback. Häufigste Ursache ist

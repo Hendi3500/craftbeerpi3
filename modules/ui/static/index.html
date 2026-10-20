@@ -15,6 +15,15 @@
   </head>
   <body>
     <div id="root" ></div>
+    <!-- Socket.IO-Client v4.
+         Das Bundle bringt einen Client der Version 2 mit, der das
+         Engine.IO-Protokoll 3 spricht. Das Backend (python-socketio 5)
+         antwortet darauf mit 400 - die alte Oberflaeche hatte damit
+         keine Live-Daten: keine Temperaturen, keine Aktualisierung
+         nach einem Schritt. Der Client v4 spricht Engine.IO 4 und
+         Socket.IO 5 und wird zuerst geladen; das Bundle benutzt ihn
+         statt seines eigenen. -->
+    <script src="static/socket.io.min.js" type="text/javascript"></script>
     <script src="static/bundle.js" type="text/javascript"></script>
 
   </body>
