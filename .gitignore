@@ -4,6 +4,7 @@ craftbeerpi.db
 **/node_modules/*
 *.pyc
 *.templog
+.opencode
 
 # PID-Datei des Servers, die tools/serverctl.sh schreibt. Sie gehoert zum
 # laufenden Betrieb und nicht ins Repository.
