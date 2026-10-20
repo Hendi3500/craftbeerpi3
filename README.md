@@ -153,6 +153,31 @@ drei Bausteine:
 
 Details im [Plugin-README](modules/base_plugins/mqtt/README.md).
 
+## Docker
+
+Für PC und Mac liegt ein Container-Setup bei (Python 3, Image auf Basis von
+`python:3.12-slim`):
+
+```bash
+docker compose up --build
+```
+
+Die Oberfläche ist danach unter <http://localhost:5000/ui/> erreichbar, die
+REST-Schnittstelle unter <http://localhost:5000/api/>.
+
+Das Verzeichnis wird in den Container gemountet — Datenbank (`craftbeerpi.db`)
+und Logs (`logs/`) liegen damit auf dem Host und überleben ein
+`docker compose down`. Der Port ist über die Umgebungsvariable `CBPI_PORT`
+änderbar; sie hat im Container Vorrang vor dem Port aus der Datenbank:
+
+```bash
+CBPI_PORT=8080 docker compose up
+```
+
+GPIO ist im Container nicht erreichbar: Aktoren am Raspberry Pi werden
+dort nicht geschaltet. Auf dem Pi läuft CraftBeerPi nach `install.sh` direkt
+auf dem System, nicht im Container.
+
 ## Entwicklung und Prüfung
 
 Unter `tools/` liegt die Test-Infrastruktur. Sie prüft nicht nur, ob die

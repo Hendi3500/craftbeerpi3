@@ -1,11 +1,29 @@
 #!/usr/bin/env python3
 
+import os
+
 from modules import socketio, app, cbpi
 
-try:
-    port = int(cbpi.get_config_parameter('port', '5000'))
-except (ValueError, TypeError):
-    port = 5000
+# Der Port kommt aus der Konfiguration (config-Tabelle in der
+# Datenbank). Im Container hat die Datenbank aber nicht immer das
+# letzte Wort: CBPI_PORT setzt den Port beim Start fest, ohne die
+# Datenbank zu aendern. Das ist noetig, weil docker-compose das
+# Port-Mapping an einem festen Wert festmacht - laeuft der Server
+# auf einem anderen Port, ist das Mapping wertlos.
+port = None
+
+port_env = os.environ.get('CBPI_PORT')
+if port_env:
+    try:
+        port = int(port_env)
+    except ValueError:
+        port = None
+
+if port is None:
+    try:
+        port = int(cbpi.get_config_parameter('port', '5000'))
+    except (ValueError, TypeError):
+        port = 5000
 
 # allow_unsafe_werkzeug: noetig, weil der Dienst ueber start-stop-daemon
 # ohne TTY laeuft (config/craftbeerpiboot). Flask-SocketIO verlangt diese

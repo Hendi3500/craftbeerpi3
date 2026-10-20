@@ -1,9 +1,56 @@
-# docker-compose file for development on a pc/mac
-version: '3.3'
+# docker-compose fuer CraftBeerPi 3.0
+#
+# Entwicklung auf PC/Mac:
+#
+#   docker compose up --build
+#
+# danach laeuft die Oberflaeche unter http://localhost:5000/ui/ und die
+# REST-Schnittstelle unter http://localhost:5000/api/.
+#
+# Der Port ist ueber die Umgebungsvariable CBPI_PORT aenderbar:
+#
+#   CBPI_PORT=8080 docker compose up
+#
+# Wichtig zum Volume: Das Verzeichnis wird in den Container gemountet.
+# Datenbank (craftbeerpi.db) und Logs (logs/) landen damit auf dem Host
+# und ueberleben ein "docker compose down". Wer den Container ohne
+# Mount betreiben will, nimmt den Volume-Block weg und legt dafuer
+# named volumes fuer /usr/src/app an.
+#
+# GPIO ist im Container nicht erreichbar. Aktoren, die auf dem
+# Raspberry Pi ueber GPIO geschaltet werden, funktionieren in diesem
+# Setup nicht - der Container ist fuer PC/Mac gedacht. Auf dem Pi
+# laeuft CraftBeerPi nach install.sh direkt auf dem System, nicht im
+# Container.
+#
+# Die Zeile "version" ist absichtlich nicht mehr da: Compose v2
+# braucht sie nicht, und Compose v1 meldet bei ihr eine Warnung.
+
 services:
   app:
-    build: .
-    ports: 
-      - 5000:5000
+    build:
+      context: .
+    image: craftbeerpi3:local
+    container_name: craftbeerpi3
+    init: true
+    restart: unless-stopped
+    ports:
+      - "${CBPI_PORT:-5000}:${CBPI_PORT:-5000}"
+    environment:
+      # Der Port hat im Container Vorrang vor dem Wert aus der
+      # Datenbank, sonst passt das Port-Mapping nicht zum laufenden
+      # Server.
+      CBPI_PORT: "${CBPI_PORT:-5000}"
+      TZ: "${TZ:-Europe/Berlin}"
     volumes:
-      - $PWD:/usr/src/app
+      - .:/usr/src/app
+    # Der Container laeuft als root. Das ist auf dem Pi noetig (GPIO),
+    # auf PC/Mac aber nur ein Nebeneffekt: die im gemounteten
+    # Verzeichnis geschriebenen Dateien gehoeren dann root. Wer das
+    # nicht will, setzt unten "user: \"${UID:-1000}:${GID:-1000}\""
+    # und passt die Rechte des Verzeichnisses an.
+    #
+    # Fuer echten GPIO-Zugriff muesste zusaetzlich /dev/gpiomem in den
+    # Container gemountet werden - auf PC/Mac gibt es die Datei nicht.
+    # devices:
+    #   - /dev/gpiomem:/dev/gpiomem

@@ -1,0 +1,26 @@
+# Was nicht ins Image gehoert. Ohne diese Datei landet der komplette
+# Arbeitsbaum im Image - vor allem das virtualenv (.venv) und die
+# .git-Historie. Das Image waere dann um ein Vielfaches groesser als
+# noetig.
+.git
+.gitignore
+.idea
+.venv
+venv
+__pycache__
+**/__pycache__
+*.pyc
+*.pyo
+*.log
+*.pid
+*.templog
+
+# Die Datenbank wird beim ersten Start im Container neu angelegt.
+craftbeerpi.db
+
+# Logs und Uploads gehoeren in den Container bzw. in das gemountete
+# Verzeichnis, nicht ins Image.
+logs/*
+!logs/empty
+upload/*
+!upload/empty
