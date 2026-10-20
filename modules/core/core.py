@@ -291,29 +291,41 @@ class CraftBeerPi(ActorAPI, SensorAPI):
     def __parseProps(self, key, cls):
         name = cls.__name__
         self.cache[key][name] = {"name": name, "class": cls, "properties": [], "actions": []}
-        tmpObj = cls()
-        members = [attr for attr in dir(tmpObj) if not callable(getattr(tmpObj, attr)) and not attr.startswith("__")]
+
+        # Die Konfigurationsfelder eines Plugins sind als Property-Objekte
+        # als KLASSENATTRIBUT deklariert:
+        #
+        #     temp = Property.Number("Temperature", configurable=True)
+        #
+        # Die Instanz traegt an dieser Stelle keine Property mehr - die
+        # Konstruktoren loesen sie auf (modules.core.props.
+        # apply_property_defaults): ein Controller rechnet mit einer Zahl,
+        # nicht mit einem Property-Objekt.
+        #
+        # Die Introspection muss deshalb die KLASSE ansehen und nicht eine
+        # erzeugte Instanz. Sie hat es vorher getan ("tmpObj = cls()") und
+        # fand damit nach der Aufloesung keine Property mehr: im Cache
+        # standen null Properties, und die Oberflaeche zeigte im
+        # Konfigurationsdialog gar keine Felder - kein Temperaturfeld, kein
+        # Timer, keine Hopgaben. Fuer jeden Brauschritt, jeden Aktor, jeden
+        # Sensor und jeden Controller.
+        members = [attr for attr in dir(cls) if not attr.startswith("__")]
         for m in members:
-            if isinstance(tmpObj.__getattribute__(m), Property.Number):
-                t = tmpObj.__getattribute__(m)
+            t = getattr(cls, m, None)
+            if isinstance(t, Property.Number):
                 self.cache[key][name]["properties"].append(
                     {"name": m, "label": t.label, "type": "number", "configurable": t.configurable, "description": t.description, "default_value": t.default_value})
-            elif isinstance(tmpObj.__getattribute__(m), Property.Text):
-                t = tmpObj.__getattribute__(m)
+            elif isinstance(t, Property.Text):
                 self.cache[key][name]["properties"].append(
                     {"name": m, "label": t.label, "type": "text", "configurable": t.configurable, "default_value": t.default_value, "description": t.description})
-            elif isinstance(tmpObj.__getattribute__(m), Property.Select):
-                t = tmpObj.__getattribute__(m)
+            elif isinstance(t, Property.Select):
                 self.cache[key][name]["properties"].append(
                     {"name": m, "label": t.label, "type": "select",  "configurable": True, "options": t.options, "description": t.description})
-            elif isinstance(tmpObj.__getattribute__(m), Property.Actor):
-                t = tmpObj.__getattribute__(m)
+            elif isinstance(t, Property.Actor):
                 self.cache[key][name]["properties"].append({"name": m, "label": t.label, "type": "actor",  "configurable": t.configurable, "description": t.description})
-            elif isinstance(tmpObj.__getattribute__(m), Property.Sensor):
-                t = tmpObj.__getattribute__(m)
+            elif isinstance(t, Property.Sensor):
                 self.cache[key][name]["properties"].append({"name": m, "label": t.label, "type": "sensor", "configurable": t.configurable, "description": t.description})
-            elif isinstance(tmpObj.__getattribute__(m), Property.Kettle):
-                t = tmpObj.__getattribute__(m)
+            elif isinstance(t, Property.Kettle):
                 self.cache[key][name]["properties"].append({"name": m, "label": t.label, "type": "kettle", "configurable": t.configurable, "description": t.description})
 
         for name, method in cls.__dict__.items():
@@ -371,26 +383,29 @@ class CraftBeerPi(ActorAPI, SensorAPI):
         name = cls.__name__
         self.cache[key][name] = {"name": name, "class": cls, "properties": [], "actions": []}
 
-        tmpObj = cls()
-        members = [attr for attr in dir(tmpObj) if not callable(getattr(tmpObj, attr)) and not attr.startswith("__")]
+        # Wie in __parseProps: die Property-Attribute stehen als
+        # Klassenattribut an dem Plugin, auf der Instanz stehen sie nicht
+        # mehr (die Konstruktoren loesen sie auf). Die Introspection
+        # schaut deshalb auf die Klasse.
+        #
+        # Ohne das hatte kein Brauschritt seine Felder - im
+        # Konfigurationsdialog des Schritts gab es kein Temperaturfeld,
+        # keinen Timer und keine Hopgaben, weil der Cache null Properties
+        # fuer jeden Schritttyp gemeldet hat.
+        members = [attr for attr in dir(cls) if not attr.startswith("__")]
         for m in members:
-            if isinstance(tmpObj.__getattribute__(m), StepProperty.Number):
-                t = tmpObj.__getattribute__(m)
+            t = getattr(cls, m, None)
+            if isinstance(t, StepProperty.Number):
                 self.cache[key][name]["properties"].append({"name": m, "label": t.label, "type": "number", "configurable": t.configurable, "default_value": t.default_value, "description": t.description})
-            elif isinstance(tmpObj.__getattribute__(m), StepProperty.Text):
-                t = tmpObj.__getattribute__(m)
+            elif isinstance(t, StepProperty.Text):
                 self.cache[key][name]["properties"].append({"name": m, "label": t.label, "type": "text", "configurable": t.configurable, "default_value": t.default_value, "description": t.description})
-            elif isinstance(tmpObj.__getattribute__(m), StepProperty.Select):
-                t = tmpObj.__getattribute__(m)
+            elif isinstance(t, StepProperty.Select):
                 self.cache[key][name]["properties"].append({"name": m, "label": t.label, "type": "select", "configurable": True, "options": t.options, "description": t.description})
-            elif isinstance(tmpObj.__getattribute__(m), StepProperty.Actor):
-                t = tmpObj.__getattribute__(m)
+            elif isinstance(t, StepProperty.Actor):
                 self.cache[key][name]["properties"].append({"name": m, "label": t.label, "type": "actor",  "configurable": t.configurable, "description": t.description})
-            elif isinstance(tmpObj.__getattribute__(m), StepProperty.Sensor):
-                t = tmpObj.__getattribute__(m)
+            elif isinstance(t, StepProperty.Sensor):
                 self.cache[key][name]["properties"].append({"name": m, "label": t.label, "type": "sensor", "configurable": t.configurable, "description": t.description})
-            elif isinstance(tmpObj.__getattribute__(m), StepProperty.Kettle):
-                t = tmpObj.__getattribute__(m)
+            elif isinstance(t, StepProperty.Kettle):
                 self.cache[key][name]["properties"].append({"name": m, "label": t.label, "type": "kettle", "configurable": t.configurable, "description": t.description})
 
         for name, method in cls.__dict__.items():
