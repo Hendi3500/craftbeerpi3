@@ -329,6 +329,90 @@ Zeilen.
   dem Start des laufenden Backends", und nach dem Neustart ist das neue
   Backend das, wogegen alles andere verglichen wird.
 
+## Die Reihenfolge des Gaer-Schrittplans (2026-10-21)
+
+Der Schrittplan eines Fermenters liess sich nicht umsortieren - und die
+Oberflaeche konnte ihn deshalb nicht anders anzeigen, als er laeuft.
+
+**Die Luecke.** `FermenterStep` hat eine Spalte `order`, und der Kern zaehlt
+sie bei jedem neuen Schritt hoch (`get_max_order() + 1`) - er liest sie aber
+nie wieder:
+
+```python
+@classmethod
+def get_by_fermenter_id(cls, id):
+    cur.execute("SELECT * FROM %s WHERE fermenter_id = ?" % cls.__table_name__, (id,))
+```
+
+Drei Folgen hat das:
+
+1. Die Schritte kommen in der Reihenfolge zurueck, in der die Zeilen in der
+   Datenbank geschrieben wurden - nicht in der, in der der Brauer sie
+   hingestellt hat.
+2. Die Reihenfolge, in der die Gaerung ablaeuft, ist die Reihenfolge der
+   Liste im Cache: `FermenterView.start_fermentation` nimmt den ersten Schritt
+   mit Zustand `I`. Diese Liste wird beim Start aus der Datenbank gefuellt -
+   nach einem Neustart laeuft also die Schedule in der Reihenfolge der Zeilen.
+3. Es gab keinen Endpunkt, der die Reihenfolge aendert. Der Kern kann einen
+   Schritt anlegen, aendern und loeschen - aber nicht sagen "der kommt
+   zuerst".
+
+**Die Aenderung** (alles in `modules/fermenter/__init__.py`):
+
+| Route | Wirkung |
+|---|---|
+| `POST /api/fermenter/<id>/step/sort` | die neue Reihenfolge der Schedule |
+
+- **`FermenterStep.get_by_fermenter_id` sortiert jetzt.** `ORDER BY` auf die
+  `order`-Spalte, mit `id` als Tie-Break. Die Spalte ist NULL bei alten Zeilen
+  (vor dem Fuellen) - die kommen nach hinten und behalten unter sich ihre
+  Reihenfolge. Ohne das gaenge die Reihenfolge bei jedem Neustart verloren:
+  der Cache wird aus der Datenbank gefuellt, und die Datenbank gibt die
+  Zeilen in der Reihenfolge aus, in der sie geschrieben wurden.
+- **`FermenterView.sortSteps`** schreibt die neue Reihenfolge in die
+  Datenbank, traegt sie in die Steps im Cache ein **und stellt die Liste im
+  Cache um**. Der letzte Teil ist der entscheidende: die Liste im Cache ist
+  die, aus der der Kern den naechsten Schritt nimmt. Es reicht also nicht,
+  nur die Datenbank zu schreiben.
+- **Der Body** ist eine Liste von `[stepid, order]`-Paaren, dieselbe Form wie
+  beim `/api/step/sort` des Kerns. Eine Liste blosser Step-Ids wird auch
+  akzeptiert; die Reihenfolge ist dann die Position in der Liste.
+- **Eine laufende Gaerung wird nicht umsortiert** (409). Der Schritt, den der
+  Regler gerade faehrt, steht in der Liste im Cache, der Task des Controllers
+  in `cbpi.cache["fermenter_task"]` - geprueft wird beides, denn der Zustand
+  des Steps und der Eintrag im Task fallen nicht in jedem Moment zusammen.
+  Den Plan unter dem laufenden Schritt zu verschieben wuerde aendern, was als
+  naechstes geheizt wird, ohne dass jemand etwas davon erfaehrt bekommt. 409
+  ist derselbe Status, den der Kern an anderer Stelle fuer "ein Schritt laeuft"
+  benutzt.
+- **Die Step-Ids muessen genau die Steps dieses Fermenters sein.** Eine Liste,
+  in der ein Schritt fehlt, wuerde diesen stehen lassen und zwei Schritte
+  dieselbe Reihenfolge teilen lassen. Fremde oder doppelte Ids werden
+  abgelehnt (400).
+- **Die Route kollidiert nicht** mit der des Kerns
+  (`/api/fermenter/<id>/step/<int:stepid>`): "sort" ist keine Step-Id, und die
+  Kern-Regel trifft nur ganze Zahlen.
+
+**Ein Nebenbefund: verwaiste Steps.** `BaseView.delete` hat den Hook
+`_post_delete_callback` nie aufgerufen - in `delete()` stand statt des Aufrufs
+eine lokale Funktion mit demselben Namen, die nie gelaufen ist. Damit blieben
+die Steps eines geloeschten Fermenters in der Tabelle stehen, und SQLite
+vergibt die Id des geloeschten Fermenters wieder: der naechste Fermenter
+bekam dann die Steps des alten und fing mit einem Schrittplan an, den niemand
+geschrieben hat. `FermenterView._post_delete_callback` loescht die Steps jetzt
+mit, und `BaseView.delete` ruft den Hook auf.
+
+**Gegenstueck in der UI** (`cbpi3UIng`): `src/lib/fermenter/step-order.ts`
+(`moveStepTo()`, `moveStepBy()`, `orderChanged()`),
+`src/components/fermenter/fermenter-widget.tsx` (der Griff `GripVertical` an
+der Zeile, per Drag & Drop und mit den Pfeiltasten),
+`src/lib/cbp/store.ts` (`reorderFermenterSteps()`) und
+`src/lib/cbp/api.ts` (`api.fermenter.sortSteps()`).
+
+**Geprueft mit** `tools/test_fermenter_step_order.py` (19 Pruefungen) - und
+die Route-Baseline in `tools/routes_baseline.json` hat die neue Route
+bekommen (110 Routen).
+
 ## Befund aus dem Server-Log: 500 statt 404 bei unbekannter Id
 
 Am 19.10.2026 um 17:35 schickte die Oberflaeche (192.168.0.193) fuenfmal

@@ -329,6 +329,13 @@
     "rule": "/api/fermenter/<int:id>/step/<int:stepid>"
   },
   {
+    "endpoint": "FermenterView:sortSteps",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/fermenter/<int:id>/step/sort"
+  },
+  {
     "endpoint": "FermenterView:postTargetTemp",
     "methods": [
       "POST"

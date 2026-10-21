@@ -189,7 +189,10 @@ und wird vom Editor unter *Konfiguration → Plugin* verwaltet.
 (2014, läuft unter Flask 3 nicht mehr). Er routet weiterhin nach
 **Methodennamen** statt nach HTTP-Verben — nötig, weil `/api/step/` sonst
 zwischen `getAll` (GET) und `/api/step/reset` (POST) kollidiert. Die
-107 Routen bleiben dadurch unverändert.
+107 Routen des Originals bleiben dadurch unverändert; die Baseline in
+`tools/routes_baseline.json` steht inzwischen bei 110 Routen — die neue Route
+`POST /api/fermenter/<id>/step/sort` (Reihenfolge des Gaer-Schrittplans)
+ist die einzige bewusste Erweiterung.
 
 ## MQTT
 
@@ -267,6 +270,7 @@ Standard-`MethodView` ist das Wegfallen der Trailing-Slashes.
 .venv/bin/python tools/test_migration.py      # 13 SQL-Migrationen
 .venv/bin/python tools/test_kern_uebernahmen.py # 43 uebernommene Kern-Funktionen
 .venv/bin/python tools/test_unbekannte_id.py    # 21 unbekannte Ids
+.venv/bin/python tools/test_fermenter_step_order.py # 19 Gaer-Step-Schedule
 ```
 
 Alle Skripte liefern bei Abweichung einen Exit-Code ungleich 0 und eignen

@@ -106,6 +106,14 @@ class BaseView(FlaskView):
         pass
 
     def _post_delete_callback(self, id):
+        """
+        Nach dem Loeschen des Eintrags.
+
+        Der Hook existiert, wurde aber nie aufgerufen: in delete() stand
+        statt des Aufrufs eine lokale Funktion mit demselben Namen, die
+        nie gelaufen ist. Views, die beim Loeschen noch etwas aufraeumen
+        wollen (der Fermenter loescht seine Steps mit), brauchen ihn.
+        """
         pass
 
     @route('/<int:id>', methods=["DELETE"])
@@ -121,9 +129,7 @@ class BaseView(FlaskView):
             self._pre_delete_callback(entry)
             del self.api.cache.get(self.cache_key)[id]
         m = self.model.delete(id)
-
-        def _post_delete_callback(self, id):
-            pass
+        self._post_delete_callback(id)
         return ('',204)
 
     @classmethod

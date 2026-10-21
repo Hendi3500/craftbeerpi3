@@ -1,5 +1,5 @@
 import time
-from flask import request
+from flask import request, json
 from modules.core.classy import route
 
 from modules import DBModel, cbpi, get_db
@@ -15,10 +15,31 @@ class FermenterStep(DBModel):
     __fields__ = ["name", "days", "hours", "minutes", "temp", "direction", "order", "state", "start", "end", "timer_start", "fermenter_id"]
     __table_name__ = "fermenter_step"
 
+    ## Die Spalte, in der die Reihenfolge des Schrittplans steht. "order" ist
+    ## ein reserviertes Wort, deshalb steht es in Anfuehrungszeichen.
+    __order_column__ = "order"
+
     @classmethod
     def get_by_fermenter_id(cls, id):
+        """
+        Die Steps eines Fermenters - in der Reihenfolge, in der sie laufen.
+
+        Die Spalte "order" wird beim Anlegen eines Steps hochgezaehlt
+        (get_max_order() + 1), aber sie wurde nie gelesen: ohne ORDER BY
+        entscheidet die Datenbank, und zwar nach der Reihenfolge, in der die
+        Zeilen geschrieben wurden - nicht nach der, in der der Brauer die
+        Steps angelegt hat. Da die Reihenfolge, in der die Gaerung laeuft, die
+        Reihenfolge dieser Liste ist (start_fermentation nimmt den ersten
+        Step mit Status "I"), laeuft der Plan nach einem Neustart in der
+        Reihenfolge, in der die Zeilen gerade stehen.
+
+        "order" ist NULL bei alten Zeilen (vor dem Fuellen der Spalte). Die
+        kommen nach hinten und behalten unter sich ihre Reihenfolge (die Id).
+        """
         cur = get_db().cursor()
-        cur.execute("SELECT * FROM %s WHERE fermenter_id = ?" % cls.__table_name__,(id,))
+        cur.execute("SELECT * FROM %s WHERE fermenter_id = ? "
+                    "ORDER BY CASE WHEN \"%s\" IS NULL THEN 1 ELSE 0 END, \"%s\", id"
+                    % (cls.__table_name__, cls.__order_column__, cls.__order_column__), (id,))
         result = []
         for r in cur.fetchall():
             result.append(cls(r))
@@ -59,6 +80,40 @@ class FermenterStep(DBModel):
         cur.execute("UPDATE %s SET state = 'I', start = NULL, end = NULL, timer_start = NULL WHERE fermenter_id = ?" % cls.__table_name__, (id,))
         get_db().commit()
 
+    @classmethod
+    def set_orders(cls, pairs):
+        """
+        Die Reihenfolge mehrerer Steps auf einmal schreiben.
+
+        Die Steps eines Schrittplans gehoeren zusammen: mit einem Commit
+        zwischen zwei Updates stuende die Datenbank dazwischen so, dass zwei
+        Steps dieselbe Reihenfolge haetten.
+
+        Die Nummern werden so geschrieben, wie sie der Client schickt - so
+        macht es der Kern beim Sortieren der Brauschritte auch
+        (Step.sort).
+        """
+        cur = get_db().cursor()
+        for step_id, order in pairs:
+            cur.execute('UPDATE %s SET "%s" = ? WHERE id = ?'
+                        % (cls.__table_name__, cls.__order_column__),
+                        (order, step_id))
+        get_db().commit()
+
+    @classmethod
+    def delete_by_fermenter_id(cls, id):
+        """
+        Alle Steps eines Fermenters loeschen.
+
+        Wird beim Loeschen des Fermenters aufgerufen: die Steps stehen sonst
+        als Waisen in der Tabelle, und SQLite vergibt die Id des geloeschten
+        Fermenters wieder - der neue Fermenter bekaeme dann die Steps des
+        alten und faengte mit einem Plan an, den niemand geschrieben hat.
+        """
+        cur = get_db().cursor()
+        cur.execute("DELETE FROM %s WHERE fermenter_id = ?" % cls.__table_name__, (id,))
+        get_db().commit()
+
 class FermenterView(BaseView):
     model = Fermenter
     cache_key = "fermenter"
@@ -78,6 +133,17 @@ class FermenterView(BaseView):
     def _post_put_callback(self, m):
         m.state = False
         self.reset(int(m.id))
+
+    def _post_delete_callback(self, id):
+        """
+        Die Steps des Fermenters mitloeschen.
+
+        Ohne das bleiben sie als Waisen in der Tabelle stehen, und SQLite
+        vergibt die Id des geloeschten Fermenters wieder - der naechste
+        Fermenter bekaeme dann die Steps des alten und faenge mit einem
+        Schrittplan an, den niemand geschrieben hat.
+        """
+        FermenterStep.delete_by_fermenter_id(id)
 
     @route('/<int:id>/targettemp/<temp>', methods=['POST'])
     def postTargetTemp(self, id, temp):
@@ -154,6 +220,144 @@ class FermenterView(BaseView):
                 FermenterStep.delete(s.id)
                 break
         cbpi.emit("UPDATE_FERMENTER", cbpi.cache.get(self.cache_key)[id])
+        return ('', 204)
+
+    @staticmethod
+    def _parse_step_order(body, steps):
+        """
+        Die neue Reihenfolge aus dem Request-Body.
+
+        Liefert eine Liste von (stepid, order) - oder None, wenn der Body
+        keine vollstaendige Reihenfolge fuer diese Steps beschreibt.
+
+        Der Body ist eine Liste von [stepid, order]-Paaren, so wie beim
+        Sortieren der Brauschritte (/api/step/sort). Eine Liste blosser
+        Step-Ids wird auch akzeptiert; die Reihenfolge ist dann die Position
+        in der Liste.
+        """
+        if not isinstance(body, list) or len(body) == 0:
+            return None
+
+        known = set()
+        for step in steps:
+            known.add(int(step.id))
+
+        pairs = []
+        seen = set()
+
+        for index, entry in enumerate(body):
+            if isinstance(entry, (list, tuple)):
+                if len(entry) != 2:
+                    return None
+                step_id, order = entry[0], entry[1]
+            else:
+                step_id, order = entry, index + 1
+
+            try:
+                step_id = int(step_id)
+                order = int(order)
+            except (TypeError, ValueError):
+                return None
+
+            # Ein Step, der nicht zu diesem Fermenter gehoert, oder einer, der
+            # zweimal vorkommt: beides wuerde den Plan in einem Zustand
+            # hinterlassen, den das Backend nicht fahren kann.
+            if step_id not in known or step_id in seen:
+                return None
+
+            seen.add(step_id)
+            pairs.append((step_id, order))
+
+        # Jeder Step muss in der Liste stehen - ein Step, der fehlt, behaelt
+        # seine alte Reihenfolge, und zwei Steps teilten sich dann eine.
+        if len(pairs) != len(steps):
+            return None
+
+        return pairs
+
+    @route('/<int:id>/step/sort', methods=['POST'])
+    def sortSteps(self, id):
+        """
+        POST /api/fermenter/<id>/step/sort - die neue Reihenfolge des
+        Schrittplans.
+
+        Body: [[stepid, order], ...] - die Steps in der neuen Reihenfolge.
+        Eine Liste blosser Step-Ids wird auch akzeptiert; die Reihenfolge ist
+        dann die Position in der Liste.
+
+        204  die neue Reihenfolge ist geschrieben
+        400  der Body beschreibt keine vollstaendige Reihenfolge fuer diese
+             Steps
+        404  es gibt keinen Fermenter mit dieser Id
+        409  die Gaerung laeuft - erst stoppen, dann den Plan aendern
+
+        Die Reihenfolge ist keine Frage der Darstellung: die Gaerung laeuft
+        in der Reihenfolge dieser Liste (start_fermentation nimmt den ersten
+        Step mit Status "I"), und die Liste wird beim Start aus der
+        Datenbank gefuellt. Die neue Reihenfolge wird deshalb in die
+        Datenbank geschrieben **und** in die Liste im Cache gestellt.
+        """
+        fermenter = cbpi.cache.get(self.cache_key, {}).get(id)
+
+        if fermenter is None:
+            return json.dumps({"message": "There is no fermenter %s" % id}), 404
+
+        steps = list(getattr(fermenter, "steps", None) or [])
+
+        if len(steps) == 0:
+            return json.dumps({"message": "The fermenter has no steps"}), 400
+
+        # Der Step, den der Regler gerade faehrt, steht im Cache, waehrend er
+        # laeuft - den Plan unter ihm zu verschieben wuerde aendern, was als
+        # naechstes geheizt wird, ohne dass jemand etwas davon erfaehrt
+        # bekommt. 409 ist derselbe Status, den der Kern an anderer Stelle
+        # fuer "ein Schritt laeuft" benutzt.
+        #
+        # Geprueft wird beides: der laufende Step (Status "A" in der Liste)
+        # und der Task des Controllers (cbpi.cache["fermenter_task"]) - der
+        # Task ist die sicherere Groesse, weil der Zustand des Steps und der
+        # Eintrag im Task nicht in jedem Moment zusammenfallen.
+        running = id in (cbpi.cache.get("fermenter_task") or {})
+
+        for step in steps:
+            if getattr(step, "state", None) == "A":
+                running = True
+                break
+
+        if running:
+            return json.dumps({
+                "message": "The fermentation is running. Stop it before "
+                           "changing the order of the steps.",
+            }), 409
+
+        pairs = self._parse_step_order(request.get_json(silent=True), steps)
+
+        if pairs is None:
+            return json.dumps({
+                "message": "The body must list every step of the fermenter with "
+                           "its new order.",
+            }), 400
+
+        FermenterStep.set_orders(pairs)
+
+        by_id = {}
+        for step in steps:
+            by_id[int(step.id)] = step
+
+        for step_id, order in pairs:
+            by_id[step_id].order = order
+
+        # Die Liste im Cache ist die Reihenfolge, in der die Gaerung laeuft -
+        # der Kern nimmt den naechsten Step daraus. Es reicht also nicht, die
+        # Reihenfolge in die Datenbank zu schreiben; die Liste wird mit
+        # umgestellt. Sortiert wird nach der Nummer, bei Gleichstand in der
+        # Reihenfolge des Bodys.
+        fermenter.steps = [by_id[step_id]
+                           for step_id, order in sorted(pairs,
+                                                        key=lambda p: p[1])]
+
+        cbpi.emit("UPDATE_FERMENTER", fermenter)
+
         return ('', 204)
 
     @route('/<int:id>/start', methods=['POST'])
