@@ -30,6 +30,11 @@ services:
   app:
     build:
       context: .
+      args:
+        # Der Vermerk im Image (EXPOSE) soll zum Port passen, auf dem
+        # der Server laeuft. Zur Laufzeit setzt die Umgebung CBPI_PORT
+        # weiter - beide kommen aus derselben Variable.
+        CBPI_PORT: "${CBPI_PORT:-5000}"
     image: craftbeerpi3:local
     container_name: craftbeerpi3
     init: true

@@ -45,9 +45,17 @@ COPY . .
 # (config/schema.sql, modules/__init__.py).
 RUN mkdir -p logs upload
 
-# Der Standardport. Mit CBPI_PORT laeuft der Server auf einem anderen
-# Port - dann muss das Port-Mapping im compose mitziehen.
-EXPOSE 5000
+# Der Port, auf dem der Server laeuft. CBPI_PORT wird zur Bauzeit als
+# --build-arg gesetzt und zur Laufzeit von der Umgebung ueberschrieben.
+#
+# EXPOSE ist nur ein Vermerk im Image - veroeffentlicht wird der Port
+# ueber das Port-Mapping. Der Wert sollte aber zum Port passen, auf dem
+# der Server tatsaechlich lauscht, sonst beschreibt das Image einen
+# falschen Port. Deshalb wird er aus derselben Variable gesetzt wie das
+# Port-Mapping.
+ARG CBPI_PORT=5000
+ENV CBPI_PORT=${CBPI_PORT}
+EXPOSE ${CBPI_PORT}
 
 # Healthcheck auf die Oberflaeche. Ohne curl - deshalb der Umweg ueber
 # urllib aus dem Interpreter, den das Image ohnehin hat.
