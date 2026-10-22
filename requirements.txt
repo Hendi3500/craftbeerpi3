@@ -2,7 +2,9 @@
 #
 # Position 4 (2026): von Python 2 auf Python 3 umgestellt.
 #   - eventlet, greenlet und flask-classy entfernt
-#   - Pins auf aktuelle Stands
+#
+# Die Kernpakete sind exakt gepinnt. Die uebrigen stehen als offene
+# Bereiche - dadurch ist der Build des Docker-Images nicht reproduzierbar.
 #
 # RPi.GPIO ist absichtlich nicht hier: auf Raspberry Pi OS Bookworm ist das
 # Paket nicht mehr verfuegbar, dort gehoert rpi-lgpio (Position 5).

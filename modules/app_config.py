@@ -97,23 +97,24 @@ class ComplexJSONProvider(DefaultJSONProvider):
             return o.get_value()
 
         # Cache-Callbacks werden als ausfuehrbare Methode markiert
-        # (CraftBeerPi.add_cache_callback, core.py:231)
+        # (CraftBeerPi.add_cache_callback)
         if hasattr(o, "callback"):
             return o()
 
         # Klassen statt Instanzen: cbpi.cache haelt in *_types die Plugin-
-        # Klassen selbst (core.py:34, core.py:272). Sie erscheinen im
-        # Cache-Dump /api/system/dump, den das Frontend beim Start laedt.
-        # Der ComplexEncoder aus Flask 0.12 gab fuer alles Unbekannte
-        # stillschweigend None zurueck - davon haengt dieser Endpunkt ab.
+        # Klassen selbst (CraftBeerPi.init_actors, __parseProps). Sie
+        # erscheinen im Cache-Dump /api/system/dump, den das Frontend beim
+        # Start laedt. Der ComplexEncoder aus Flask 0.12 gab fuer alles
+        # Unbekannte stillschweigend None zurueck - davon haengt dieser
+        # Endpunkt ab.
         if isinstance(o, type):
             return {"name": o.__name__, "module": o.__module__}
 
-        # Funktionen im Cache sind Background-Tasks (core.py:469) und
-        # Cache-Callbacks (core.py:231). Callables werden ausgefuehrt, wenn
-        # sie als callback markiert sind, sonst nur benannt - die
-        # Dekorator-Wrapper in core.py:474 wuerden beim Aufruf in den
-        # Cache schreiben.
+        # Funktionen im Cache sind Background-Tasks (CraftBeerPi.backgroundtask)
+        # und Cache-Callbacks (CraftBeerPi.add_cache_callback). Callables
+        # werden ausgefuehrt, wenn sie als callback markiert sind, sonst nur
+        # benannt - die Dekorator-Wrapper wuerden beim Aufruf in den Cache
+        # schreiben.
         if isinstance(o, types.FunctionType):
             return {"name": o.__name__, "module": o.__module__}
 
@@ -147,17 +148,17 @@ app.json = ComplexJSONProvider(app)
 # async_mode fest auf threading. eventlet ist deprecated und nur noch im
 # Bugfix-Modus; ohne diese Angabe wuerde flask-socketio selbst ein
 # async-Modell waehlen. Der Server empfaengt keine Socket-Events - der
-# Socket ist reiner Server->Client-Push (core.py:219-220) - es gibt also
+# Socket ist reiner Server->Client-Push (CraftBeerPi.emit) - es gibt also
 # keinen Bedarf fuer kooperative Nebenlaeufigkeit zwischen I/O-Warten.
 #
 # Der Namespace /brew muss hier ausdruecklich benannt werden: python-socketio
-# 5.x prueft bei jedem Connect gegen eine Whitelist (server.py:519-523) und
-# lehnt sonst mit "Unable to connect" ab. /brew hat im Projekt keinen Handler,
-# weil der Socket reiner Server->Client-Push ist - ohne diese Angabe kann
-# sich kein Client verbinden und es kommen keine Live-Daten mehr an.
+# 5.x prueft bei jedem Connect gegen eine Whitelist und lehnt sonst mit
+# "Unable to connect" ab. /brew hat im Projekt keinen Handler, weil der Socket
+# reiner Server->Client-Push ist - ohne diese Angabe kann sich kein Client
+# verbinden und es kommen keine Live-Daten mehr an.
 #
-# Wichtig: die Liste ERSETZT den Default ['/'] (base_server.py:65), nicht
-# erweitert ihn. '/' bleibt deshalb enthalten.
+# Wichtig: die Liste ERSETZT den Default ['/'] (python-engineio, base_server),
+# nicht erweitert ihn. '/' bleibt deshalb enthalten.
 #
 # json=json ist Pflicht: flask-socketio erkennt das flask.json-Modul und
 # ersetzt es durch einen FlaskSafeJSON-Wrapper, der den App-Kontext erzwingt

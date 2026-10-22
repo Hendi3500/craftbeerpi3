@@ -4,10 +4,10 @@ unter Flask 3 nicht laedt.
 
 flask_classy registriert Routen ueber Methodennamen statt ueber HTTP-Verben
 und haengt beim Bauen der Regel die Argumente der Methode als URL-Parameter
-an (build_rule, flask_classy.py:217-246). Beides wird hier nachgebildet, damit
-die 107 Routen unveraendert bleiben - siehe MIGRATION.md.
+an (build_rule). Beides wird hier nachgebildet, damit die Routen unveraendert
+bleiben - siehe MIGRATION.md.
 
-Der importanteste Unterschied zu einem Standard-MethodView: dispatchiert wird
+Der wichtigste Unterschied zu einem Standard-MethodView: dispatchiert wird
 nach dem Routennamen, nicht nach dem HTTP-Verb. Bei /api/step/ wuerde ein
 Standard-MethodView die POST-Route fuer getAll sonst mit der Action-Route
 kollidieren lassen.
@@ -63,7 +63,7 @@ class FlaskView(MethodView):
     def build_rule(cls, rule, method=None):
         """
         Baut die URL: route_prefix + route_base + rule, danach die Argumente
-        der Methode als URL-Parameter (flask_classy.py:229-246).
+        der Methode als URL-Parameter.
 
         Das ist der Grund fuer /api/step/init_step/<step> - die Regel lautet
         nur "/init_step", das Argument step wird angehaengt.
@@ -127,7 +127,7 @@ class FlaskView(MethodView):
                         endpoint = "%s:%s_%d" % (cls.__name__, name, idx)
                     app.add_url_rule(
                         # build_rule ohne method: bei explizitem @route werden
-                        # Argumente nicht angehaengt (flask_classy.py:106)
+                        # Argumente nicht angehaengt
                         cls.build_rule(rule_str),
                         endpoint,
                         cls.as_proxy(name),

@@ -130,8 +130,7 @@ class LogView(FlaskView):
 @cbpi.initalizer()
 def init(app):
     """
-    Initializer for the message module
+    Initializer for the log module
     :param app: the flask app
-    :return: None
     """
     LogView.register(cbpi.app, route_base='/api/logs')

@@ -76,17 +76,19 @@ im Terminal. Wird eine Quelldatei geändert, beendet sich der Server und
 startet neu — mit dem Code, der gerade auf der Platte liegt. Beenden
 mit `Strg+C`.
 
-Beobachtet werden alle `.py-`, `.sql-`, `.html-` und `.yaml`-Dateien
-unter `modules/` und `update/` sowie `run.py` und `config/schema.sql`.
-Nicht beobachtet werden `__pycache__/`, `logs/`, das gebaute
-Frontend-Bundle (`modules/ui/static/`) und die Datenbank — sonst würde
-der Server endlos neu starten.
+Beobachtet werden alle `.py-`, `.sql-`, `.html-`, `.yaml-` und `.yml-`
+Dateien unter `modules/` und `update/` sowie `run.py` und
+`config/schema.sql`. Nicht beobachtet werden `__pycache__/`, `logs/`, die
+Frontend-Quellen und das gebaute Bundle (`modules/ui/src/` und
+`modules/ui/static/`) sowie die Datenbank — sonst würde der Server
+endlos neu starten.
 
 | Option | Bedeutung |
 |---|---|
 | `--port PORT` | Port des Servers. Ohne die Option gilt der Port aus der Datenbank. Praktisch, wenn neben dem laufenden Server entwickelt wird: `./run_dev.py --port 5000` |
 | `--log-level LVL` | Log-Level. Vorgabe ist `DEBUG` |
 | `--no-restart` | Nur starten, nichts beobachten |
+| `--crash-guard` | Beim Absturz des Servers die letzten Logzeilen ausgeben |
 
 Alternativ über die Umgebung: `CBPI_PORT=5000 ./run_dev.py` und
 `CBPI_LOG_LEVEL=INFO ./run_dev.py`.
@@ -271,6 +273,12 @@ Standard-`MethodView` ist das Wegfallen der Trailing-Slashes.
 .venv/bin/python tools/test_kern_uebernahmen.py # 43 uebernommene Kern-Funktionen
 .venv/bin/python tools/test_unbekannte_id.py    # 21 unbekannte Ids
 .venv/bin/python tools/test_fermenter_step_order.py # 19 Gaer-Step-Schedule
+.venv/bin/python tools/test_cascadecontrol.py    # 24 kaskadierte Regler
+.venv/bin/python tools/test_fermenter_auto.py    # 11 Gaer-Automatik
+.venv/bin/python tools/test_mqtt_config.py       # 18 MQTT-Konfiguration
+.venv/bin/python tools/test_plugin_properties.py # 13 Plugin-Properties
+.venv/bin/python tools/test_step_reset.py        # 10 Step-Reset
+.venv/bin/python tools/test_telegram_plugin.py  # 31 Telegram-Plugin
 ```
 
 Alle Skripte liefern bei Abweichung einen Exit-Code ungleich 0 und eignen
@@ -329,7 +337,13 @@ Vor dem Checkout wird der aktuelle Stand als Branch
 `backup/pre-tag-checkout` gesichert, damit der Zustand wiederherstellbar
 bleibt.
 
-**`CRITICAL: We need to talk about your installation`**
+**GPIO fehlt**
 Python 3.12 oder neuer auf einem System, in dem `rpi-lgpio` nicht
 gebaut werden kann. Die GPIO-Aktoren und der Buzzer brauchen das Paket;
-alles andere läuft ohne.
+alles andere läuft ohne. Der Stub in `modules/core/gpio.py` meldet das
+beim ersten Zugriff:
+
+```
+GPIO not available: setup cannot be executed. On the Raspberry Pi install
+the package 'rpi-lgpio' (pip install rpi-lgpio).
+```

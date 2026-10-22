@@ -57,8 +57,7 @@ def messageEvent(message, **kwargs):
 def init(cbpi):
     """
     Initializer for the message module
-    :param app: the flask app
-    :return: None
+    :param cbpi: the craftbeerpi instance
     """
     if cbpi.get_config_parameter("donation_notification", "YES") == "YES":
         msg = {"id": len(cbpi.cache["messages"]), "type": "info", "headline": "Support CraftBeerPi with your donation", "message": "You will find the PayPay Donation button in the system menu" , "read": False}

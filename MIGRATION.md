@@ -1,6 +1,6 @@
 # Portierung CraftBeerPi 3.0 auf Python 3 / Flask 3
 
-Workflow und Notizen zur laufenden Portierung. Zustaendig: Position 1-4 abgeschlossen, Port nach Verlust am 19.10.2026 wiederhergestellt (siehe unten).
+Workflow und Notizen zur laufenden Portierung. Zustaendig: Position 1-7 abgeschlossen, Port nach Verlust am 19.10.2026 wiederhergestellt (siehe unten). Position 8 (Hardware-Test) ist offen.
 
 ## Verlust und Wiederherstellung (2026-10-19)
 
@@ -448,26 +448,38 @@ unterscheiden, ausser an der Quell-IP der Requests.
 
 | Skript | Prüft | Anzahl |
 |---|---|---|
-| `snapshot_routes.py` | erzeugt `routes_current.json` | 107 Routen |
-| `compare_routes.py` | Routenliste gegen die Baseline | 107/107 |
-| `test_api.py` | REST-Aufrufe | 32/32 |
+| `snapshot_routes.py` | erzeugt `routes_current.json` | 110 Routen |
+| `compare_routes.py` | Routenliste gegen die Baseline | 110/110 |
+| `test_api.py` | REST-Aufrufe | 33/33 |
 | `test_json.py` | Serialisierung | 16/16 |
-| `test_socket.py` | Socket.IO-Details | 21/21 |
-| `test_socket_e2e.py` | Live-Datenstrom mit echtem WebSocket | 9/9 |
+| `test_socket.py` | Socket.IO-Details | 27/27 |
+| `test_socket_e2e.py` | Live-Datenstrom mit echtem WebSocket | 10/10 |
 | `sweep_endpoints.py` | alle GET-Routen, nur lesend | 0 unerwartete |
 | `test_gpio.py` | GPIO-Schicht | 34/34 |
 | `test_system.py` | System-Endpunkte, Checkout-Schutz | 14/14 |
 | `test_plugins.py` | Plugin-Management, Traversal | 42/42 |
 | `test_migration.py` | SQL-Migrationen, Frischinstallation | 13/13 |
 | `test_kern_uebernahmen.py` | die aus den Plugin-Updates uebernommenen Funktionen | 43/43 |
-| `test_unbekannte_id.py` | PUT/DELETE auf eine unbekannte Id | 21/21 |
+| `test_unbekannte_id.py` | PUT/DELETE auf eine unbekannte Id | 24/24 |
+| `test_fermenter_step_order.py` | Reihenfolge des Gaer-Schrittplans | 19/19 |
+| `test_cascadecontrol.py` | kaskadierte PID- und Hysterese-Regler | 24/24 |
+| `test_fermenter_auto.py` | Gaer-Automatik | 11/11 |
+| `test_mqtt_config.py` | MQTT-Konfiguration | 18/18 |
+| `test_plugin_properties.py` | Plugin-Properties | 13/13 |
+| `test_step_reset.py` | Step-Reset | 10/10 |
+| `test_telegram_plugin.py` | Telegram-Plugin | 31/31 |
+
+Die 107 Routen des Originals bleiben unveraendert. Die Baseline steht bei
+110 Routen - die eine bewusste Erweiterung ist
+`POST /api/fermenter/<id>/step/sort` (Reihenfolge des Gaer-Schrittplans).
 
 Alle Skripte liefern bei Abweichung einen Exit-Code ungleich 0 und eignen
 sich damit als Gate. `test_migration.py` arbeitet in einem eigenen
 Verzeichnis und fasst die echte Datenbank nicht an.
 
 Position 7 ist als "teilweise" markiert, weil `requirements.txt` und das
-MQTT-Plugin jetzt stimmen, `install.sh` aber noch nicht geprüft ist.
+MQTT-Plugin jetzt stimmen, `install.sh` aber auf einem echten Raspberry Pi
+noch nicht durchlaufen ist. Auf einem Entwicklerrechner laeuft es.
 
 ## Das Route-Gate
 
@@ -535,7 +547,7 @@ wegfallen.
 
 `flask_classy 0.6.10` (Release 01.04.2014) ist durch `modules/core/classy.py`
 ersetzt, 190 Zeilen. Der Import wurde in allen 15 View-Dateien umgestellt,
-`requirements.txt` wurde **noch nicht** angefasst (das ist Position 7).
+`requirements.txt` wurde in Position 7 angefasst (siehe unten).
 
 ### Warum kein Standard-MethodView
 
@@ -599,7 +611,7 @@ nicht behoben:
 **Imports** — 12 implizite relative Imports, die unter Python 3
 `ModuleNotFoundError` werfen, ohne dass es die Syntax-Pruefung bemerkt:
 `from props import *` (core.py:15), `from hardware import *` (core.py:17),
-`from db import get_db` (db_mirgrate.py:4), `import endpoints` (4x),
+`from db import get_db` (db_mirgrate.py), `import endpoints` (4x),
 `import beerxml/kbh/restapi`, `from app_config import` (2x),
 `from thread import start_new_thread`, `import urllib` (ungenutzt, entfernt).
 
@@ -610,7 +622,7 @@ nicht behoben:
    `@cbpi.event("X", async=True)` schreibt, muss auf `async_=` umstellen. Der
    dict-Key `"async"` bleibt bewusst String, damit `emit_event` weiter greift.
 
-2. **`None >= int`** (db_mirgrate.py:7) — beim ersten Start ist `schema_info`
+2. **`None >= int`** (db_mirgrate.py, `execute_file`) — beim ersten Start ist `schema_info`
    leer, `max(version)` liefert `None`. Python 2 toleriert das, Python 3 wirft
    `TypeError`. **Ein frischer Start bricht ohne diesen Fix komplett ab.**
 

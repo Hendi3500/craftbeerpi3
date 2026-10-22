@@ -80,11 +80,9 @@ def merge(source, destination):
     Helper method to merge two dicts
     :param source:
     :param destination:
-    :return:
     """
     for key, value in source.items():
         if isinstance(value, dict):
-               # get node or create one
             node = destination.setdefault(key, {})
             merge(value, node)
         else:
@@ -96,7 +94,6 @@ def merge(source, destination):
 def getPlugins():
     """
     Endpoint for all plugins
-    :return:
     """
     result = []
     for filename in os.listdir(PLUGIN_DIR):
@@ -209,7 +206,6 @@ def reload_plugin(name):
 def plugins():
     """
     Read the central plugin yaml to get a list of all official plugins
-    :return:
     """
     response = requests.get("https://raw.githubusercontent.com/Manuel83/craftbeerpi-plugins/master/plugins.yaml")
     cbpi.cache["plugins"] = merge(yaml.safe_load(response.text), cbpi.cache["plugins"])
@@ -285,7 +281,6 @@ def loadPlugins():
             cbpi.notify("Failed to load plugin %s " % filename, str(e), type="danger", timeout=None)
             cbpi.app.logger.error(e)
 
-#@cbpi.initalizer(order=1)
 def initPlugins():
     loadCorePlugins()
     loadPlugins()

@@ -8,7 +8,6 @@ import logging
 # Define the WSGI application object
 
 from modules.app_config import *
-import pprint
 
 from modules.core.db import get_db
 
@@ -44,11 +43,7 @@ from modules.app_config import cbpi
 # This will create the database file using SQLAlchemy
 
 
-pp = pprint.PrettyPrinter(indent=6)
-
-
 def init_db():
-    print("INIT DB")
     with app.app_context():
         db = get_db()
 
@@ -58,7 +53,11 @@ def init_db():
 
             db.commit()
         except Exception as e:
-            pass
+            # Das Schema ist die Grundlage fuer alles Weitere. Ein Fehler
+            # hier darf nicht stillschweigend verschwinden - dann laeuft
+            # der Server mit einer unbrauchbaren Datenbank weiter.
+            app.logger.error("Schema konnte nicht angelegt werden: %s: %s"
+                             % (type(e).__name__, e))
 
 init_db()
 initPlugins()

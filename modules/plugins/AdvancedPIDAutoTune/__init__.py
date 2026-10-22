@@ -113,7 +113,6 @@ NOTES:
 - Degrees Celsius only. The relay, the 0.5 degree noise band and the water
   heat capacity are all metric; a backend running on Fahrenheit is warned and
   the run is refused rather than answered in the wrong scale.
-- Python 2 code, like the core it runs next to.
 """
 
 import logging

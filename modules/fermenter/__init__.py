@@ -25,13 +25,13 @@ class FermenterStep(DBModel):
         Die Steps eines Fermenters - in der Reihenfolge, in der sie laufen.
 
         Die Spalte "order" wird beim Anlegen eines Steps hochgezaehlt
-        (get_max_order() + 1), aber sie wurde nie gelesen: ohne ORDER BY
-        entscheidet die Datenbank, und zwar nach der Reihenfolge, in der die
-        Zeilen geschrieben wurden - nicht nach der, in der der Brauer die
-        Steps angelegt hat. Da die Reihenfolge, in der die Gaerung laeuft, die
-        Reihenfolge dieser Liste ist (start_fermentation nimmt den ersten
-        Step mit Status "I"), laeuft der Plan nach einem Neustart in der
-        Reihenfolge, in der die Zeilen gerade stehen.
+        (get_max_order() + 1). Ohne ORDER BY entscheidet die Datenbank,
+        und zwar nach der Reihenfolge, in der die Zeilen geschrieben wurden -
+        nicht nach der, in der der Brauer die Steps angelegt hat. Da die
+        Reihenfolge, in der die Gaerung laeuft, die Reihenfolge dieser Liste
+        ist (start_fermentation nimmt den ersten Step mit Status "I"),
+        laeuft der Plan nach einem Neustart sonst in der Reihenfolge, in der
+        die Zeilen gerade stehen.
 
         "order" ist NULL bei alten Zeilen (vor dem Fuellen der Spalte). Die
         kommen nach hinten und behalten unter sich ihre Reihenfolge (die Id).
@@ -583,10 +583,9 @@ class FermenterView(BaseView):
 @cbpi.backgroundtask(key="read_target_temps_fermenter", interval=5)
 def read_target_temps(api):
     """
-    background process that reads all passive sensors in interval of 1 second
+    Schreibt die Soll-Temperaturen der Fermenter in die Logdatei.
     :return: None
     """
-    result = {}
     for key, value in cbpi.cache.get("fermenter").items():
         cbpi.save_to_file(key, value.target_temp, prefix="fermenter")
 
@@ -598,14 +597,6 @@ def execute_fermentation_step(api):
     with cbpi.app.app_context():
         instance.check_step()
 
-
-def init_active_steps():
-    '''
-    active_steps = FermenterStep.query.filter_by(state='A')
-    for a in active_steps:
-        db.session.expunge(a)
-        cbpi.cache["fermenter_task"][a.fermenter_id] = a
-    '''
 
 @cbpi.initalizer(order=1)
 def init(cbpi):

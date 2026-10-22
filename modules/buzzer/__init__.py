@@ -43,8 +43,6 @@ class Buzzer(object):
             except Exception as e:
                 pass
 
-        # Python 2: thread.start_new_thread(play, (self.sound,))
-        # Python 3 kennt kein "thread"-Modul mehr, dafuer threading.Thread.
         t = threading.Thread(target=play, args=(self.sound,))
         t.daemon = True
         t.start()

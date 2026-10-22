@@ -39,9 +39,8 @@ def init(cbpi):
 @cbpi.backgroundtask(key="read_passiv_sensor", interval=5)
 def read_passive_sensor(api):
     """
-    background process that reads all passive sensors in interval of 1 second
+    Liest die passiven Sensoren aus.
     :return: None
-
     """
     for key, value in cbpi.cache.get("sensors").items():
         if value.mode == "P":

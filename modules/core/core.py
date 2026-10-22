@@ -87,7 +87,6 @@ class SensorAPI(object):
     def init_sensors(self):
         '''
         Initialize all sensors
-        :return: 
         '''
 
         self.app.logger.info("Init Sensors")
@@ -112,15 +111,13 @@ class SensorAPI(object):
     def init_sensor(self, id):
         '''
         initialize sensor by id
-        :param id: 
-        :return: 
+        :param id:
         '''
 
         def start_active_sensor(instance):
             '''
             start active sensors as background job
-            :param instance: 
-            :return: 
+            :param instance:
             '''
             instance.execute()
 
@@ -196,7 +193,6 @@ class CacheAPI(object):
 class CraftBeerPi(ActorAPI, SensorAPI):
 
     cache = {
-        "init": {},
         "config": {},
         "actor_types": {},
         "sensor_types": {},
@@ -339,18 +335,6 @@ class CraftBeerPi(ActorAPI, SensorAPI):
 
     def actor(self, cls):
         return self.__parseProps("actor_types", cls)
-
-
-
-    def actor2(self, description="", power=True, **options):
-
-        def decorator(f):
-            print(f())
-            print(f)
-            print(options)
-            print(description)
-            return f
-        return decorator
 
     def sensor(self, cls):
         return self.__parseProps("sensor_types", cls)
@@ -530,7 +514,6 @@ class CraftBeerPi(ActorAPI, SensorAPI):
     def run_init(self):
         '''
         call all initialziers after startup
-        :return: 
         '''
         self.app.logger.info("Invoke Init")
         self.cache["init"] = sorted(self.cache["init"], key=lambda k: k['order'])
@@ -544,10 +527,9 @@ class CraftBeerPi(ActorAPI, SensorAPI):
 
         '''
         Background Task Decorator
-        :param key: 
-        :param interval: 
-        :param config_parameter: 
-        :return: 
+        :param key:
+        :param interval:
+        :param config_parameter:
         '''
         def real_decorator(function):
             self.cache["background"].append({"function": function, "key": key, "interval": interval, "config_parameter": config_parameter})
@@ -559,7 +541,6 @@ class CraftBeerPi(ActorAPI, SensorAPI):
     def run_background_processes(self):
         '''
         call all background task after startup
-        :return: 
         '''
         self.app.logger.info("Start Background")
 

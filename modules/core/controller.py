@@ -43,7 +43,7 @@ class ControllerBase(object):
 
     @staticmethod
     def init_global():
-        print("GLOBAL CONTROLLER INIT")
+        pass
 
     def notify(self, headline, message, type="success", timeout=5000):
         self.api.notify(headline, message, type, timeout)

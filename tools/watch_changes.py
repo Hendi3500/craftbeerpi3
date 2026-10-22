@@ -66,10 +66,15 @@ WATCH_FILES = ("run.py", "config/schema.sql")
 SUFFIXES = (".py", ".sql", ".html", ".yaml", ".yml")
 
 # Verzeichnisse, die komplett ignoriert werden.
-SKIP_DIRS = ("__pycache__", ".git", ".venv", "node_modules", "logs", "upload")
+# logs/ und upload/ stehen hier nicht drin: sie liegen ausserhalb der
+# beobachteten Wurzeln (WATCH_DIRS) und werden ohnehin nie betreten.
+SKIP_DIRS = ("__pycache__", ".git", ".venv", "node_modules")
 
 # Pfade (relativ zur Wurzel), die ignoriert werden.
-SKIP_PATHS = (os.path.join("modules", "ui", "static"),)
+# modules/ui/static/ ist das gebaute Bundle, modules/ui/src/ sind die
+# Quellen des Frontends - beide werden ausgeliefert, nicht ausgewertet.
+SKIP_PATHS = (os.path.join("modules", "ui", "static"),
+              os.path.join("modules", "ui", "src"))
 
 
 def _norm(path):

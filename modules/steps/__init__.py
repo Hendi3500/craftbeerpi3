@@ -98,7 +98,6 @@ class StepView(BaseView):
     def stop_step(self):
         '''
         stop active step
-        :return:
         '''
         step = cbpi.cache.get("active_step")
         cbpi.cache["active_step"] = None
@@ -133,7 +132,6 @@ class StepView(BaseView):
     def resetCurrentStep(self):
         '''
         Reset current step
-        :return: 
         '''
         step = cbpi.cache.get("active_step")
 
@@ -153,16 +151,12 @@ class StepView(BaseView):
         cbpi.log_action("Start Step %s" % step.name)
         type_cfg = cbpi.cache.get("step_types").get(step.type)
         if type_cfg is None:
-            # if type not found
             return
 
-        # copy config to stepstate
-        # init step
         cfg = step.config.copy()
         cfg.update(dict(name=step.name, api=cbpi, id=step.id, timer_end=None, managed_fields=get_manged_fields_as_array(type_cfg)))
         instance = type_cfg.get("class")(**cfg)
         instance.init()
-        # set step instance to ache
         cbpi.cache["active_step"] = instance
 
     @route('/next', methods=['POST'])
@@ -207,11 +201,7 @@ def init_after_startup():
     '''
 
     step = Step.get_by_state('A')
-    # We have an active step
     if step is not None:
-
-        # get the type
-
 
         type_cfg = cbpi.cache.get("step_types").get(step.type)
 
@@ -245,8 +235,7 @@ def init(cbpi):
 @cbpi.backgroundtask(key="step_task", interval=0.1)
 def execute_step(api):
     '''
-    Background job which executes the step 
-    :return: 
+    Background job which executes the step
     '''
     with cbpi.app.app_context():
         step = cbpi.cache.get("active_step")

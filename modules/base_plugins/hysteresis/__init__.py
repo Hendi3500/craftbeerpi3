@@ -15,18 +15,13 @@ class Hysteresis(KettleController):
         '''
         Invoked when the automatic is stopped.
         Normally you switch off the actors and clean up everything
-        :return: None
         '''
         super(KettleController, self).stop()
         self.heater_off()
 
-
-
-
     def run(self):
         '''
         Each controller is exectuted in its own thread. The run method is the entry point
-        :return: 
         '''
         while self.is_running():
 

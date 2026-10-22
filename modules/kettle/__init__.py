@@ -82,10 +82,9 @@ def set_target_temp(id, temp):
 @cbpi.backgroundtask(key="read_target_temps", interval=5)
 def read_target_temps(api):
     """
-    background process that reads all passive sensors in interval of 1 second
+    Schreibt die Soll-Temperaturen der Kessel in die Logdatei.
     :return: None
     """
-    result = {}
     for key, value in cbpi.cache.get("kettle").items():
         cbpi.save_to_file(key, value.target_temp, prefix="kettle")
 

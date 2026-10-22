@@ -31,7 +31,7 @@ class RESTImport(FlaskView):
             boil_kettle = cbpi.get_config_parameter("step_boil_kettle", None)
             boil_temp = 100 if cbpi.get_config_parameter("unit", "C") == "C" else 212
 
-            # READ KBH DATABASE
+            # Bestehenden Brauplan verwerfen - das Rezept ersetzt ihn.
             Step.delete_all()
             StepView().reset()
 

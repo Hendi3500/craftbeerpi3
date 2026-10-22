@@ -65,7 +65,7 @@ class KBH(FlaskView):
         boil_kettle = cbpi.get_config_parameter("step_boil_kettle", None)
         boil_temp = 100 if cbpi.get_config_parameter("unit", "C") == "C" else 212
 
-        # READ KBH DATABASE
+        # Bestehenden Brauplan verwerfen - das Rezept ersetzt ihn.
         Step.delete_all()
         StepView().reset()
         conn = None
@@ -78,18 +78,17 @@ class KBH(FlaskView):
 
             self.api.set_config_parameter("brew_name", name)
             Step.insert(**{"name": "MashIn", "type": mashinstep_type, "config": {"kettle": mash_kettle, "temp": row[0]}})
-            ### add rest step
+            # Rasten (Ruheschritte)
             for row in c.execute('SELECT * FROM Rasten WHERE SudID = ?', (id,)):
                 Step.insert(**{"name": row[5], "type": mashstep_type, "config": {"kettle": mash_kettle, "temp": row[3], "timer": row[4]}})
             Step.insert(**{"name": "Chil", "type": chilstep_type, "config": {"timer": 15}})
-            ## Add cooking step
+            # Kochschritt
             c.execute('SELECT max(Zeit) FROM Hopfengaben WHERE SudID = ?', (id,))
             row = c.fetchone()
             Step.insert(**{"name": "Boil", "type": boilstep_type, "config": {"kettle": boil_kettle, "temp": boil_temp, "timer": row[0]}})
-            ## Add Whirlpool step
+            # Whirlpool
             Step.insert(**{"name": "Whirlpool", "type": chilstep_type, "config": {"timer": 15}})
 
-            #setBrewName(name)
             self.api.emit("UPDATE_ALL_STEPS", Step.get_all())
             self.api.notify(headline="Recipe %s loaded successfully" % name, message="")
         except Exception as e:
