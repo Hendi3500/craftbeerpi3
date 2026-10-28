@@ -167,6 +167,7 @@ export async function createApp(options: AppOptions = {}): Promise<App> {
   for (const manifest of options.plugins ?? []) plugins.register(manifest)
   await plugins.loadAll()
   plugins.populate(cache)
+  plugins.createAll(api, cache)
 
   setJsonDiagnostics({
     unknown: (typeName) => {
