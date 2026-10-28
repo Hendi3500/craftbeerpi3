@@ -54,7 +54,7 @@ export function registerKettleModule(
 ): void {
   registerBaseView(router, {
     base: '/api/kettle',
-    endpoint: 'KettleView',
+    endpoint: 'Kettle2View',
     table: repository.table,
     api,
     cacheKey: 'kettle',
@@ -82,7 +82,7 @@ export function registerKettleModule(
   })
 
   router
-    .add('POST', '/api/kettle/<int:id>/targettemp/<temp>', 'KettleView:postTargetTemp', (ctx) => {
+    .add('POST', '/api/kettle/<int:id>/targettemp/<temp>', 'Kettle2View:postTargetTemp', (ctx) => {
       const id = Number(ctx.params.id)
       const temp = Number(ctx.params.temp)
 
@@ -100,7 +100,7 @@ export function registerKettleModule(
       api.emit('UPDATE_KETTLE_TARGET_TEMP', { id, target_temp: temp })
       return noContent()
     })
-    .add('POST', '/api/kettle/<int:id>/automatic', 'KettleView:toggle', (ctx) => {
+    .add('POST', '/api/kettle/<int:id>/automatic', 'Kettle2View:toggle', (ctx) => {
       const id = Number(ctx.params.id ?? '')
       const kettleCache = api.cache.get<Record<string, Row>>('kettle')
       if (kettleCache) {
