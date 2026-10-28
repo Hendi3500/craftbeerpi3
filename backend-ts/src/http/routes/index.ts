@@ -13,6 +13,7 @@ import { registerLogModule } from '../../modules/logs.ts'
 import { StepRepository, registerStepModule } from '../../modules/step.ts'
 import { ActorRepository, registerActorModule } from '../../modules/actor.ts'
 import { SensorRepository, registerSensorModule } from '../../modules/sensor.ts'
+import { KettleRepository, registerKettleModule } from '../../modules/kettle.ts'
 import type { PluginInstance } from '../../plugins/contract.ts'
 import { redirect } from '../respond.ts'
 import { serveFile } from '../static.ts'
@@ -68,4 +69,5 @@ export function registerRoutes(
     dependencies.pluginHost,
     new SensorRepository(dependencies.db),
   )
+  registerKettleModule(router, api, new KettleRepository(dependencies.db))
 }
