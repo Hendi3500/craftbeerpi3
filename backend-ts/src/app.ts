@@ -92,7 +92,6 @@ export async function createApp(options: AppOptions = {}): Promise<App> {
   const cache = new Cache(CACHE_SEED)
   const bus = new EventBus()
   const httpServer = createServer()
-  const io = createSocket(httpServer)
 
   const api = new Api({
     cache,
@@ -106,6 +105,52 @@ export async function createApp(options: AppOptions = {}): Promise<App> {
     configTable,
     logsDir,
   })
+
+  const io = createSocket(httpServer)
+
+  // Socket.IO Event-Wiring: bus Events -> /brew Namespace
+  bus.on('SENSOR_UPDATE', (payload: unknown) => io.of('/brew').emit('SENSOR_UPDATE', payload))
+  bus.on('SWITCH_ACTOR', (actor: unknown) => io.of('/brew').emit('SWITCH_ACTOR', actor))
+  bus.on('UPDATE_KETTLE', (kettleIdOrData: unknown) => {
+    const id = typeof kettleIdOrData === 'number'
+      ? kettleIdOrData
+      : (kettleIdOrData as Record<string, unknown>).id
+    const kettle = api.cache.get('kettle') as Record<string, unknown> | undefined
+    io.of('/brew').emit('UPDATE_KETTLE', kettle?.[String(id)] ?? { id })
+  })
+  bus.on('UPDATE_KETTLE_TARGET_TEMP', (data: unknown) => io.of('/brew').emit('UPDATE_KETTLE_TARGET_TEMP', data))
+  bus.on('UPDATE_FERMENTER', (fermenter: unknown) => {
+    const cacheFermenter = api.cache.get<Record<string, unknown>>('fermenter')
+    io.of('/brew').emit('UPDATE_FERMENTER', cacheFermenter?.[String(fermenter.id ?? fermenter)] ?? fermenter)
+  })
+  bus.on('UPDATE_FERMENTER_TARGET_TEMP', (data: unknown) => io.of('/brew').emit('UPDATE_FERMENTER_TARGET_TEMP', data))
+  bus.on('UPDATE_FERMENTER_BREWNAME', (data: unknown) => io.of('/brew').emit('UPDATE_FERMENTER_BREWNAME', data))
+  bus.on('UPDATE_ALL_STEPS', (steps: unknown) => io.of('/brew').emit('UPDATE_ALL_STEPS', steps))
+  bus.on('UPDATE_CONFIG', (config: unknown) => io.of('/brew').emit('UPDATE_CONFIG', config))
+  bus.on('NOTIFY', (message: unknown) => io.of('/brew').emit('NOTIFY', message))
+  bus.on('NOTIFY_DISMISS', (id: unknown) => io.of('/brew').emit('NOTIFY_DISMISS', { id }))
+  bus.on('RESTART_SCHEDULED', (data: unknown) => io.of('/brew').emit('RESTART_SCHEDULED', data))
+
+  // Socket.IO Event-Wiring: bus Events -> /brew Namespace
+  bus.on('SENSOR_UPDATE', (payload) => io.of('/brew').emit('SENSOR_UPDATE', payload))
+  bus.on('SWITCH_ACTOR', (actor) => io.of('/brew').emit('SWITCH_ACTOR', actor))
+  bus.on('UPDATE_KETTLE', (kettleIdOrData) => {
+    const id = typeof kettleIdOrData === 'number' ? kettleIdOrData : (kettleIdOrData as Record<string, unknown>).id
+    const kettle = api.cache.get('kettle') as Record<string, unknown> | undefined
+    io.of('/brew').emit('UPDATE_KETTLE', kettle?.[String(id)] ?? { id })
+  })
+  bus.on('UPDATE_KETTLE_TARGET_TEMP', (data) => io.of('/brew').emit('UPDATE_KETTLE_TARGET_TEMP', data))
+  bus.on('UPDATE_FERMENTER', (fermenter) => {
+    const cacheFermenter = api.cache.get<Record<string, unknown>>('fermenter')
+    io.of('/brew').emit('UPDATE_FERMENTER', cacheFermenter?.[String(fermenter.id ?? fermenter)] ?? fermenter)
+  })
+  bus.on('UPDATE_FERMENTER_TARGET_TEMP', (data) => io.of('/brew').emit('UPDATE_FERMENTER_TARGET_TEMP', data))
+  bus.on('UPDATE_FERMENTER_BREWNAME', (data) => io.of('/brew').emit('UPDATE_FERMENTER_BREWNAME', data))
+  bus.on('UPDATE_ALL_STEPS', (steps) => io.of('/brew').emit('UPDATE_ALL_STEPS', steps))
+  bus.on('UPDATE_CONFIG', (config) => io.of('/brew').emit('UPDATE_CONFIG', config))
+  bus.on('NOTIFY', (message) => io.of('/brew').emit('NOTIFY', message))
+  bus.on('NOTIFY_DISMISS', (id) => io.of('/brew').emit('NOTIFY_DISMISS', { id }))
+  bus.on('RESTART_SCHEDULED', (data) => io.of('/brew').emit('RESTART_SCHEDULED', data))
 
   const router = new Router(logger)
   const plugins = new ManifestPluginHost(root, logger)
