@@ -15,6 +15,7 @@ import { ActorRepository, registerActorModule } from '../../modules/actor.ts'
 import { SensorRepository, registerSensorModule } from '../../modules/sensor.ts'
 import { KettleRepository, registerKettleModule } from '../../modules/kettle.ts'
 import { FermenterRepository, FermenterStepRepository, registerFermenterModule } from '../../modules/fermenter.ts'
+import { registerEditorModule } from '../../modules/editor/editor.ts'
 import type { PluginInstance } from '../../plugins/contract.ts'
 import { redirect } from '../respond.ts'
 import { serveFile } from '../static.ts'
@@ -25,6 +26,7 @@ import { registerSystemRoutes } from './system.ts'
 export interface RouteDependencies {
   root: string
   configTable: Table
+  api: Api
   db: Db
   logsDir: string
   pluginHost: { create(kind: string, name: string, api: Api, config?: Record<string, unknown>): PluginInstance | undefined }
@@ -77,4 +79,5 @@ export function registerRoutes(
     new FermenterRepository(dependencies.db),
     new FermenterStepRepository(dependencies.db),
   )
+  registerEditorModule(router, { api: dependencies.api })
 }

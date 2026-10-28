@@ -141,6 +141,7 @@ export async function createApp(options: AppOptions = {}): Promise<App> {
   registerRoutes(router, api, {
     root,
     configTable,
+    api,
     db,
     logsDir,
     pluginHost: plugins,
