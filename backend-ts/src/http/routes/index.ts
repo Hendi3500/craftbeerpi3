@@ -14,6 +14,7 @@ import { StepRepository, registerStepModule } from '../../modules/step.ts'
 import { ActorRepository, registerActorModule } from '../../modules/actor.ts'
 import { SensorRepository, registerSensorModule } from '../../modules/sensor.ts'
 import { KettleRepository, registerKettleModule } from '../../modules/kettle.ts'
+import { FermenterRepository, FermenterStepRepository, registerFermenterModule } from '../../modules/fermenter.ts'
 import type { PluginInstance } from '../../plugins/contract.ts'
 import { redirect } from '../respond.ts'
 import { serveFile } from '../static.ts'
@@ -70,4 +71,10 @@ export function registerRoutes(
     new SensorRepository(dependencies.db),
   )
   registerKettleModule(router, api, new KettleRepository(dependencies.db))
+  registerFermenterModule(
+    router,
+    api,
+    new FermenterRepository(dependencies.db),
+    new FermenterStepRepository(dependencies.db),
+  )
 }
