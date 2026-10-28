@@ -1,0 +1,26 @@
+{
+  "name": "cbpi-backend-ts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "CraftBeerPi 3 backend, rewritten in TypeScript (parity-first)",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "start": "node src/index.ts",
+    "dev": "node --watch src/index.ts",
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "socket.io": "^4.8.4",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^24.19.2",
+    "typescript": "^7.0.2"
+  }
+}
