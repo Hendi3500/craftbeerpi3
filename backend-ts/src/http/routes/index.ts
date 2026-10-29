@@ -22,6 +22,11 @@ import { serveFile } from '../static.ts'
 import { registerConfigRoutes } from './config.ts'
 import { registerNotificationRoutes } from './notification.ts'
 import { registerSystemRoutes } from './system.ts'
+import { registerRestartRoutes } from './restart.ts'
+import { registerBeerXmlRoutes } from '../../modules/recipe_import/beerxml.ts'
+import { registerKbhRoutes } from '../../modules/recipe_import/kbh.ts'
+import { registerOneWireRoutes } from '../../modules/one_wire.ts'
+import { registerRestImportRoutes } from '../../modules/recipe_import/restapi.ts'
 
 export interface RouteDependencies {
   root: string
@@ -79,5 +84,10 @@ export function registerRoutes(
     new FermenterRepository(dependencies.db),
     new FermenterStepRepository(dependencies.db),
   )
+  registerRestartRoutes(router, api)
+  registerBeerXmlRoutes(router, api)
+  registerKbhRoutes(router, api)
+  registerOneWireRoutes(router, api)
+  registerRestImportRoutes(router, api)
   registerEditorModule(router, { api: dependencies.api })
 }

@@ -9,6 +9,9 @@ import { createServer, type Server as HttpServer } from 'node:http'
 import { join } from 'node:path'
 import type { Server as SocketServer } from 'socket.io'
 import { Api, type Message } from './core/api.ts'
+import { BackgroundTaskManager, setGlobalTaskManager } from './core/background.ts'
+import { initPluginInstances } from './core/init_plugins.ts'
+import { registerBackgroundTasks } from './core/background_tasks.ts'
 import { Cache } from './core/cache.ts'
 import { EventBus } from './core/events.ts'
 import { Db, Table } from './db.ts'
@@ -65,6 +68,7 @@ export interface App {
   io: SocketServer
   httpServer: HttpServer
   plugins: ManifestPluginHost
+  tasks: BackgroundTaskManager
   close(): Promise<void>
 }
 
@@ -153,6 +157,33 @@ export async function createApp(options: AppOptions = {}): Promise<App> {
   plugins.populate(cache)
   plugins.createAll(api, cache)
 
+  // Initialize plugin instances from cache AFTER plugin createAll()
+  initPluginInstances(api, plugins)
+
+  // Buzzer initialisieren (modules/buzzer/__init__.py)
+  // Der Buzzer wird ueber GPIO gesteuert, ist aber optional
+  try {
+    const { initBuzzer } = await import('./modules/buzzer.ts')
+    initBuzzer(api)
+  } catch (error) {
+    logger.warning(`Buzzer initialization failed: ${String(error)}`)
+  }
+
+  // Stats-Modul initialisieren (modules/stats/__init__.py)
+  // Sendet Telemetrie-Daten an den CraftBeerPi-Server
+  try {
+    const { initStatsModule } = await import('./modules/stats.ts')
+    initStatsModule(api)
+  } catch (error) {
+    logger.warning(`Stats initialization failed: ${String(error)}`)
+  }
+
+  // Background Task Manager initialisieren und Tasks registrieren
+  const tasks = new BackgroundTaskManager(api)
+  setGlobalTaskManager(tasks)
+  registerBackgroundTasks(tasks, api)
+  tasks.startAll()
+
   setJsonDiagnostics({
     unknown: (typeName) => {
       logger.debug(`JSON: unknown type ${typeName} becomes null`)
@@ -191,9 +222,11 @@ export async function createApp(options: AppOptions = {}): Promise<App> {
     io,
     httpServer,
     plugins,
+    tasks,
     close: () =>
       new Promise<void>((resolve) => {
         io.close()
+        tasks.stopAll()
         if (!httpServer.listening) {
           db.close()
           resolve()

@@ -55,6 +55,20 @@ export interface PluginInstance {
   set_power?(power?: unknown): void | Promise<void>
   /** Sensor */
   get_value?(): unknown
+  /** Sensor: passive Sensoren werden vom Hintergrundtask gelesen. */
+  read?(): unknown
+  /** Controller: blockierende Regelschleife, laeuft bis stop(). */
+  run?(): void | Promise<void>
+  is_running?(): boolean
+  /** Controller: Kessel-/Fermenter-Helfer (siehe plugins/controller.ts). */
+  heater_on?(power?: number): void | Promise<void>
+  heater_off?(): void | Promise<void>
+  get_temp?(): number | null
+  get_target_temp?(): number | null
+  actor_on?(power?: number, id?: number): void | Promise<void>
+  actor_off?(id?: number): void | Promise<void>
+  actor_power?(power: number, id?: number): void | Promise<void>
+  get_sensor_value?(id?: number): number | null
 }
 
 export interface PluginManifest {

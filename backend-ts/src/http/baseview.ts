@@ -20,6 +20,7 @@
  */
 import type { Api } from '../core/api.ts'
 import type { Row, Table } from '../db.ts'
+import { CacheCallback } from '../json.ts'
 import { HttpError, type Router } from './router.ts'
 import { json, noContent } from './respond.ts'
 
@@ -59,6 +60,12 @@ function cachedMap(api: Api, key: string | null): CacheMap | null {
   const value = api.cache.get(key)
   if (value === null || value === undefined) return null
   if (Array.isArray(value)) return null
+  if (value instanceof CacheCallback) {
+    // CacheCallback auswerten: zurücklieferten Wert statt Callback-Objekt
+    const called = value.call()
+    if (Array.isArray(called)) return null
+    return called as unknown as CacheMap
+  }
   if (typeof value !== 'object') return null
   return value as CacheMap
 }

@@ -212,6 +212,26 @@ export function registerActorModule(
       }
       return noContent()
     })
+    // toggleTimeJob - GET route for background task (called directly, not from HTTP)
+    .add('GET', '/api/actor/toggleTimeJob/<id>/<t>', 'ActorView:toggleTimeJob', (ctx) => {
+      const id = Number(ctx.params.id ?? '')
+      const t = Number(ctx.params.t ?? 0)
+      const actors = actorCache(api)
+      const actor = actors?.[String(id)]
+      if (actor) {
+        actor.timer = Math.floor(Date.now() / 1000) + t
+        // Simulate the background task behavior
+        setTimeout(() => {
+          if (actor?.state === 0) {
+            switchActorOn(id)
+          } else {
+            switchActorOff(id)
+          }
+          actor.timer = null
+        }, t * 1000)
+      }
+      return noContent()
+    })
 
   // Cache-Callback fuer /api/system/dump, wie add_cache_callback("actors", ...)
   api.cache.set('actors', new CacheCallback(() => repository.all()))

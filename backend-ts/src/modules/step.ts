@@ -87,12 +87,18 @@ export class StepRepository {
   }
 }
 
+/**
+ * Zeitstempel in Sekunden (Unix epoch).
+ */
 function nowSeconds(): number {
   return Math.floor(Date.now() / 1000)
 }
 
+/**
+ * Stoppt den aktiven Schritt und setzt die Zieltemperatur des Kessels auf 0.
+ */
 function stopStep(api: Api): void {
-  const step = api.cache.get<Row | null>('active_step')
+  const step = api.cache.get<Record<string, unknown> | null>('active_step')
   api.cache.set('active_step', null)
 
   if (step) {
@@ -104,11 +110,16 @@ function stopStep(api: Api): void {
   }
 }
 
-function startStep(api: Api, repository: StepRepository) {
+/**
+ * Startet einen Schritt (idle -> active) oder beendet einen laufenden (active -> done).
+ * Echo to Python: StepView.start() / StepView.next()
+ */
+function startStep(api: Api, repository: StepRepository): void {
   const active = repository.byState('A')
   const inactive = repository.byState('I')
 
   if (active) {
+    // aktiver Schritt beenden
     repository.updateState(active.id as number, 'D')
     repository.update(active.id as number, { end: nowSeconds() })
     stopStep(api)
@@ -133,7 +144,6 @@ function startStep(api: Api, repository: StepRepository) {
   }
 
   api.emit('UPDATE_ALL_STEPS', repository.all())
-  return noContent()
 }
 
 export function registerStepModule(
@@ -175,7 +185,6 @@ export function registerStepModule(
       return noContent()
     })
     .add('POST', '/api/step/reset/current', 'StepView:resetCurrentStep', () => {
-      // Ohne aktiven Schritt gibt es nichts zurueckzusetzen.
       return noContent()
     })
     .add('POST', '/api/step/action/<method>', 'StepView:action', (ctx) => {
@@ -191,27 +200,19 @@ export function registerStepModule(
     .add('POST', '/api/step/next', 'StepView:start_1', () =>
       startStep(api, repository),
     )
-    .add(
-      'GET',
-      '/api/step/init_step/<step>',
-      'StepView:init_step',
-      (ctx) => {
-        // Im Original ist das eine Methode, die per classy als GET-Route
-        // mit einem String aufgerufen wird und dann scheitert. Hier wird
-        // sie sauber zu einem No-op (D-9).
-        api.log(
-          'debug',
-          `init_step("${ctx.params.step ?? ''}") ignored - no step types registered (M5)`,
-        )
-        return noContent()
-      },
-    )
+    .add('GET', '/api/step/init_step/<step>', 'StepView:init_step', (ctx) => {
+      api.log(
+        'debug',
+        `init_step("${ctx.params.step ?? ''}") ignored - no step types registered (M5)`,
+      )
+      return noContent()
+    })
     .add('GET', '/api/step/stop_step/', 'StepView:stop_step', () => {
       stopStep(api)
       return noContent()
     })
 
   // /api/system/dump fuehrt den Callback aus und zeigt den aktuellen
-  // Datenbankstand - wie add_cache_callback("steps", get_all) im Original.
+  // Datenbankstand - wie add_cache_callback("steps", get_all) im Originale.
   api.cache.set('steps', new CacheCallback(() => repository.all()))
 }

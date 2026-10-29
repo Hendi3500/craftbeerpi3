@@ -44,6 +44,7 @@ import type {
   PluginManifest,
   PropertyDescriptor,
 } from './contract.ts'
+import type { Row } from '../db.ts'
 
 const FILES = ['plugin.ts', 'plugin.js', 'plugin.mjs']
 
@@ -136,9 +137,13 @@ export class ManifestPluginHost implements PluginHost {
   constructor(root: string, logger: Logger) {
     this.root = root
     this.logger = logger
+    // Die TypeScript-Plugins liegen unter backend-ts/src/modules. `root` ist
+    // die Projektwurzel (config/, update/, logs/, craftbeerpi.db); die
+    // Python-Plugins unter <root>/modules sind fuer diese Laufzeit irrelevant.
+    const modules = join(root, 'backend-ts', 'src', 'modules')
     this.discovered = [
-      ...this.scan('base', join(root, 'modules', 'base_plugins')),
-      ...this.scan('user', join(root, 'modules', 'plugins')),
+      ...this.scan('base', join(modules, 'base_plugins')),
+      ...this.scan('user', join(modules, 'plugins')),
     ]
   }
 
@@ -174,7 +179,9 @@ export class ManifestPluginHost implements PluginHost {
   }
 
   private moduleName(directory: string): string {
-    return relative(this.root, directory)
+    // Python-Modulname fuer /api/system/dump: "modules.base_plugins.x".
+    const src = join(this.root, 'backend-ts', 'src')
+    return relative(src, directory)
       .split(/[\\/]/)
       .join('.')
   }
@@ -198,15 +205,18 @@ export class ManifestPluginHost implements PluginHost {
       default?: unknown
       manifest?: unknown
     }
-    const manifest = validate(
-      module.manifest ?? module.default,
-      `plugin ${entry.scope}/${entry.name}`,
-    )
-    if (manifest.module === undefined) {
-      manifest.module = this.moduleName(entry.directory)
-    }
+    // Eine Datei darf mehrere Klassen desselben Python-Moduls exportieren
+    // (z. B. GPIOSimple und GPIOPWM). Dann ist der Default ein Array.
+    const raw = module.manifest ?? module.default
+    const manifests = Array.isArray(raw) ? raw : [raw]
     this.files.set(entry.name, file)
-    this.register(manifest)
+    for (const candidate of manifests) {
+      const manifest = validate(candidate, `plugin ${entry.scope}/${entry.name}`)
+      if (manifest.module === undefined) {
+        manifest.module = this.moduleName(entry.directory)
+      }
+      this.register(manifest)
+    }
   }
 
   async loadAll(): Promise<void> {
@@ -268,6 +278,16 @@ export class ManifestPluginHost implements PluginHost {
    * Create all plugin instances from loaded manifests.
    * This method expects the API instance to be passed because manifests require it.
    */
+  /**
+   * Create all plugin instances from loaded manifests.
+   * This method creates instances and stores them in the API cache.
+   * The instances are stored per-kind and are available via
+   * cbpi.cache["actors"], cbpi.cache["sensors"], etc.
+   *
+   * Note: This overwrites any existing DB-row-only entries in the cache
+   * with plugin-instantiated objects that have the same structure plus
+   * an .instance field and runtime state.
+   */
   createAll(api: Api, cache: Cache): void {
     for (const manifest of this.loaded.values()) {
       const kind = manifest.kind
@@ -278,9 +298,64 @@ export class ManifestPluginHost implements PluginHost {
         if (instance === undefined) continue
 
         const key = TYPE_CACHE[kind]
-        if (!key) continue
+        if (!key) {
+          this.logger.debug(`No cache key for plugin kind: ${kind}`)
+          continue
+        }
 
         const typeCache = cache.getOr<Record<string, unknown>>(key, () => ({}))
+
+        // For actors and sensors, also store the instance in each DB entry
+        if (kind === 'actor' || kind === 'sensor') {
+          // Get existing entries of this type from the cache
+          const existingEntries = cache.get<Record<string, Row>>(key) || {}
+          const instanceEntry: Record<string, unknown> = {
+            name,
+            class: marker(manifest),
+            properties: manifest.properties.map(propertyEntry),
+            actions: (manifest.actions ?? []).map((action) => ({
+              method: action.method,
+              label: action.label,
+            })),
+            instance,
+          }
+
+          // If there are DB entries of this type, enhance them with instance data
+          if (existingEntries && typeof existingEntries !== 'function') {
+            for (const [entryId, entry] of Object.entries(existingEntries)) {
+              if (entry && typeof entry === 'object') {
+                // Merge instance data into the entry
+                const enhancedEntry = { ...entry, instance }
+                typeCache[entryId] = enhancedEntry
+              }
+            }
+          }
+
+          // Also set a global entry for the kind
+          typeCache['global'] = {
+            name,
+            class: marker(manifest),
+            properties: manifest.properties.map(propertyEntry),
+            actions: (manifest.actions ?? []).map((action) => ({
+              method: action.method,
+              label: action.label,
+            })),
+            instance,
+          }
+        } else {
+          // For controllers and other kinds, store globally
+          typeCache['global'] = {
+            name,
+            class: marker(manifest),
+            properties: manifest.properties.map(propertyEntry),
+            actions: (manifest.actions ?? []).map((action) => ({
+              method: action.method,
+              label: action.label,
+            })),
+            instance,
+          }
+        }
+
         typeCache[name] = {
           name,
           class: marker(manifest),
@@ -292,8 +367,6 @@ export class ManifestPluginHost implements PluginHost {
         }
         cache.set(key, typeCache)
 
-        // TODO: Store instance per-kind (actors, sensors, kettle, etc.)
-        // This will be implemented when we know the cache structure
         this.logger.debug(`Plugin ${kind}:${name} instantiated successfully`)
       } catch (error) {
         this.logger.error(

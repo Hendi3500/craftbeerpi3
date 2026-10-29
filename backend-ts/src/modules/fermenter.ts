@@ -18,6 +18,7 @@
  *   POST /api/fermenter/<id>/automatic           -> Automatik toggle
  */
 import type { Api } from '../core/api.ts'
+import { CacheCallback } from '../json.ts'
 import { Table } from '../db.ts'
 import type { Db, Row } from '../db.ts'
 import { registerBaseView } from '../http/baseview.ts'
@@ -76,6 +77,10 @@ export class FermenterStepRepository {
 
   all(): Row[] {
     return this.table.all() as Row[]
+  }
+
+  one(id: string | number): Row | null {
+    return this.table.one(id)
   }
 
   byFermenter(fermenterId: number): Row[] {
@@ -408,7 +413,7 @@ export function registerFermenterModule(
   })
 
   // automatic toggle
-  router.add('POST', '/api/fermenter/<int:id>/automatic', 'FermenterView:toggle', (ctx) => {
+  router.add('POST', '/api/fermenter/<int:id>/automatic', 'FermenterView:toggle', async (ctx) => {
     const id = Number(ctx.params.id)
     const cache = api.cache.get<Record<string, Row>>('fermenter')
     const fermenter = cache?.[String(id)]
@@ -416,19 +421,94 @@ export function registerFermenterModule(
 
     const wasRunning = fermenter.state === true
 
-    if (wasRunning) {
-      // stop
+    try {
+      if (wasRunning) {
+        // stop
+        fermenter.state = false
+        const taskCache = api.cache.get<Record<string, unknown>>('fermenter_task')
+        if (taskCache) delete taskCache[String(id)]
+      } else {
+        // start - would need controller instantiation (M5)
+        fermenter.state = true
+      }
+
+      // Start/stop controller instance if present
+      const instance = (fermenter as Record<string, unknown>).instance as { run?: () => unknown; stop?: () => unknown } | undefined
+      if (fermenter.state === true) {
+        if (instance && typeof instance.run === 'function') {
+          try {
+            void instance.run()
+          } catch (error) {
+            api.log('warning', `Fermenter ${id} controller run() failed: ${String(error)}`)
+          }
+        }
+      } else if (instance && typeof instance.stop === 'function') {
+        try {
+          void instance.stop()
+        } catch (error) {
+          api.log('warning', `Fermenter ${id} controller stop() failed: ${String(error)}`)
+        }
+      }
+    } catch (error) {
+      api.log('error', `Switching the fermenter ${id} failed: ${String(error)}`)
+      api.notify('Switching the fermenter failed', 'Please check the configuration of the fermenter', 'danger', null)
       fermenter.state = false
-      const taskCache = api.cache.get<Record<string, unknown>>('fermenter_task')
-      if (taskCache) delete taskCache[String(id)]
-    } else {
-      // start - would need controller instantiation (M5)
-      fermenter.state = true
+      return noContent()
     }
 
     api.emit('UPDATE_FERMENTER', fermenter)
     return noContent()
   })
+
+  // check step
+  router.add('GET', '/api/fermenter/check_step/', 'FermenterView:check_step', (ctx) => {
+    const taskCache = api.cache.get<Record<string, unknown>>('fermenter_task') || {}
+    const ferms = Object.values(taskCache) as Row[]
+    for (const ferm of ferms) {
+      const id = Number(ferm.id)
+      const step = ferm as Row
+      const currentTemp = 20 // Placeholder for get_sensor_value
+
+      if (currentTemp >= Number(step.temp)) {
+        // high direction - temp reached
+        const temp = Number(step.temp)
+        stepRepo.update({ id: Number(step.id), state: 'A', direction: currentTemp >= Number(step.temp) ? 'C' : 'H' })
+        api.emit('UPDATE_FERMENTER_TARGET_TEMP', { id, target_temp: temp })
+      } else if (currentTemp <= Number(step.temp)) {
+        // cold direction - temp reached
+        const temp = Number(step.temp)
+        stepRepo.update({ id: Number(step.id), state: 'A', direction: currentTemp >= Number(step.temp) ? 'C' : 'H' })
+        api.emit('UPDATE_FERMENTER_TARGET_TEMP', { id, target_temp: temp })
+      }
+    }
+    return noContent()
+  })
+
+  // get fermenter
+  router.add('GET', '/api/fermenter/get_fermenter/<id>', 'FermenterView:get_fermenter', (ctx) => {
+    const id = Number(ctx.params.id)
+    const fermenter = api.cache.get<Record<string, Row>>('fermenter')?.[String(id)] ?? null
+    return json(fermenter)
+  })
+
+  // target temp reached
+  router.add('GET', '/api/fermenter/target_temp_reached/<id>/<step>', 'FermenterView:target_temp_reached', (ctx) => {
+    const id = Number(ctx.params.id)
+    const step = Number(ctx.params.step)
+    const taskCache = api.cache.getOr<Record<string, unknown>>('fermenter_task', () => ({}))
+    if (taskCache[String(id)]) {
+      const fermenterStep = stepRepo.one(step)
+      if (fermenterStep) {
+        const timestamp = Date.now()
+        stepRepo.updateTimer(step, timestamp)
+        api.emit('UPDATE_FERMENTER_TARGET_TEMP', { id, target_temp: Number(fermenterStep.temp) })
+      }
+    }
+    return noContent()
+  })
+
+  // Cache-Callback fuer /api/system/dump
+  api.cache.set('fermenter', new CacheCallback(() => fermenterRepo.all()))
 }
 
 function resetFermenter(api: Api, stepRepo: FermenterStepRepository, id: number): void {
