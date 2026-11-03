@@ -13,10 +13,14 @@ FROM python:3.12-slim
 # Der Logger des Projekts schreibt zusaetzlich nach ./logs/app.log.
 # PYTHONDONTWRITEBYTECODE: keine .pyc-Dateien im Image.
 # PIP_NO_CACHE_DIR: kein pip-Cache im Image.
+# GIT_PYTHON_REFRESH: GitPython sucht beim Import nach einem git-Binary
+# und meckert, wenn keins da ist. Im Container braucht die App kein git -
+# die Meldung wird damit unterdrueckt.
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    GIT_PYTHON_REFRESH=quiet
 
 # Zeitzone. Ohne das tzdata-Paket im Image ist die Variable TZ
 # wirkungslos und Flask/dateutil rechnen in UTC. DEBIAN_FRONTEND
