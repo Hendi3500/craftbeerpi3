@@ -238,10 +238,24 @@ docker compose up --build
 Die Oberfläche ist danach unter <http://localhost:5000/ui/> erreichbar, die
 REST-Schnittstelle unter <http://localhost:5000/api/>.
 
-Das Verzeichnis wird in den Container gemountet — Datenbank (`craftbeerpi.db`)
-und Logs (`logs/`) liegen damit auf dem Host und überleben ein
-`docker compose down`. Der Port ist über die Umgebungsvariable `CBPI_PORT`
-änderbar; sie hat im Container Vorrang vor dem Port aus der Datenbank:
+Das Projektverzeichnis wird in den Container gemountet — Logs (`logs/`) und
+Uploads liegen damit auf dem Host. Die Datenbank (`craftbeerpi.db`) liegt
+getrennt davon in `./data` und überlebt ein `docker compose down` und ein
+Neu-Bauen des Images. Der Ordner ist über `CBPI_DATA_DIR` änderbar:
+
+```bash
+CBPI_DATA_DIR=/mnt/ssd/cbpi docker compose up
+```
+
+Existiert dort noch keine `craftbeerpi.db`, legt die App eine neue an. Eine
+bestehende Datenbank vor dem ersten Start kopieren:
+
+```bash
+mkdir -p data && cp craftbeerpi.db data/
+```
+
+Der Port ist über die Umgebungsvariable `CBPI_PORT` änderbar; die
+Datenbank hat keinen Port-Parameter mehr:
 
 ```bash
 CBPI_PORT=8080 docker compose up

@@ -52,7 +52,9 @@ cd "$ROOT" || exit 1
 
 PIDFILE="$ROOT/logs/server.pid"
 LOGFILE="$ROOT/logs/server.log"
-DBFILE="$ROOT/craftbeerpi.db"
+# Dieselbe Quelle wie in modules/core/db.py: CBPI_DB oder die Datei im
+# Projektverzeichnis.
+DBFILE="${CBPI_DB:-$ROOT/craftbeerpi.db}"
 RUNSCRIPT="$ROOT/run.py"
 
 # --- Ausgabe ---------------------------------------------------------------
@@ -72,25 +74,13 @@ else
     exit 1
 fi
 
-# --- Port aus der Konfiguration -------------------------------------------
-# Der Port kommt aus der Datenbank, nicht aus dem Code. Wird er
-# geaendert, muss das hier nicht angepasst werden.
+# --- Port ------------------------------------------------------------------
+# Der Port kommt aus CBPI_PORT, sonst 5000 - dieselbe Regel wie in
+# run.py. Der fruehere Port-Parameter in der Datenbank ist entfernt
+# (update/7_remove_port_config.sql).
 
 read_port() {
-    local port=""
-    if [ -f "$DBFILE" ]; then
-        port="$("$PYTHON" - "$DBFILE" <<'PYEOF' 2>/dev/null
-import sqlite3, sys
-try:
-    db = sqlite3.connect(sys.argv[1])
-    row = db.execute("SELECT value FROM config WHERE name='port'").fetchone()
-    print(row[0] if row else "")
-except Exception:
-    print("")
-PYEOF
-)"
-    fi
-    # Leer oder unbrauchbar -> der Vorgabewert aus run.py
+    local port="${CBPI_PORT:-}"
     case "$port" in
         ''|*[!0-9]*) port=5000 ;;
     esac

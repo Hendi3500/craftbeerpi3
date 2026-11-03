@@ -6,6 +6,11 @@ craftbeerpi.db
 *.templog
 .opencode
 .claude
+# Datenbank und Laufzeitdaten des Containers (CBPI_DATA_DIR). Die
+# craftbeerpi.db gehoert nicht ins Repository - sie wird beim ersten
+# Start neu angelegt.
+data/
+
 # PID-Datei des Server-Verwaltungsskripts (tools/serverctl.sh). Sie
 # enthaelt die Prozess-ID des laufenden Servers und gehoert zum laufenden
 # Betrieb - auf einem anderen Rechner ist sie falsch.

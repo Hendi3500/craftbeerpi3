@@ -16,11 +16,15 @@ FROM python:3.12-slim
 # GIT_PYTHON_REFRESH: GitPython sucht beim Import nach einem git-Binary
 # und meckert, wenn keins da ist. Im Container braucht die App kein git -
 # die Meldung wird damit unterdrueckt.
+# CBPI_DB: Pfad der Datenbank. Er zeigt auf /data, damit die Datenbank
+# ueber ein Volume ausserhalb des Containers liegen kann (siehe
+# docker-compose.yml). Ohne Mount bleibt sie im Container.
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    GIT_PYTHON_REFRESH=quiet
+    GIT_PYTHON_REFRESH=quiet \
+    CBPI_DB=/data/craftbeerpi.db
 
 # Zeitzone. Ohne das tzdata-Paket im Image ist die Variable TZ
 # wirkungslos und Flask/dateutil rechnen in UTC. DEBIAN_FRONTEND
@@ -45,9 +49,12 @@ COPY . .
 # Verzeichnisse, in die die App zur Laufzeit schreibt:
 #   logs/   - app.log, action.log, <sensor>_<id>.log
 #   upload/ - Uploads aus dem Datei-Plugin
-# Die Datenbank craftbeerpi.db legt die App beim Start selbst an
-# (config/schema.sql, modules/__init__.py).
-RUN mkdir -p logs upload
+#   /data   - craftbeerpi.db (CBPI_DB). Als eigenes Verzeichnis, damit es
+#             sich unabhaengig vom Code mounten laesst.
+# Die Datenbank-Datei legt die App beim Start selbst an
+# (config/schema.sql, modules/__init__.py), das Verzeichnis muss aber da
+# sein.
+RUN mkdir -p logs upload /data
 
 # Der Port, auf dem der Server laeuft. CBPI_PORT wird zur Bauzeit als
 # --build-arg gesetzt und zur Laufzeit von der Umgebung ueberschrieben.

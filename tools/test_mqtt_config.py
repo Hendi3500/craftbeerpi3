@@ -67,6 +67,9 @@ def _start(directory):
     """Die App einmal starten (der Import reicht - run_init laeuft dabei)."""
     env = dict(os.environ)
     env["PYTHONPATH"] = directory
+    # Der Test arbeitet in seinem eigenen Verzeichnis. Ein CBPI_DB aus
+    # der Umgebung wuerde die Datenbank woandershin legen.
+    env.pop("CBPI_DB", None)
     return subprocess.run([sys.executable, "-c", "import modules"],
                           cwd=directory, env=env, capture_output=True,
                           timeout=180)

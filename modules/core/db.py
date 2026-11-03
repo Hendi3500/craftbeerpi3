@@ -1,6 +1,28 @@
+import os
 import sqlite3
 
 from flask import json, g
+
+
+def db_file():
+    """
+    Pfad zur SQLite-Datenbank.
+
+    Vorgabe ist ``craftbeerpi.db`` im Arbeitsverzeichnis - wie bisher.
+    ``CBPI_DB`` erlaubt einen anderen Pfad. Im Container zeigt er auf
+    ein gemountetes Verzeichnis (z. B. ``/data/craftbeerpi.db``), damit
+    die Datenbank ausserhalb des Containers liegt und ein
+    ``docker compose down`` sie nicht mitnimmt.
+
+    Das Elternverzeichnis wird angelegt, wenn es fehlt. Sonst scheitert
+    ``sqlite3.connect()`` mit "unable to open database file", sobald der
+    Pfad aus CBPI_DB auf ein noch nicht existierendes Verzeichnis zeigt.
+    """
+    path = os.environ.get('CBPI_DB') or 'craftbeerpi.db'
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+    return path
 
 
 def get_db():
@@ -11,7 +33,7 @@ def get_db():
             for idx, col in enumerate(cursor.description):
                 d[col[0]] = row[idx]
             return d
-        db = g._database = sqlite3.connect('craftbeerpi.db')
+        db = g._database = sqlite3.connect(db_file())
         db.row_factory = dict_factory
     return db
 
