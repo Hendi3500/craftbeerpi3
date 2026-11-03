@@ -34,8 +34,8 @@ Datenbank).
 Optionen
 ---------
 ``--port PORT``     Der Port, auf dem der Server laeuft. Ohne die Option
-                    gilt der Port aus der Datenbank (wie beim normalen
-                    Start). Praktisch, wenn neben dem laufenden Server
+                    gilt ``CBPI_PORT`` (wie beim normalen Start), sonst
+                    5000. Praktisch, wenn neben dem laufenden Server
                     entwickelt wird::
 
                         ./run_dev.py --port 5000
@@ -60,8 +60,8 @@ Datenbank
 Der Entwicklungsserver benutzt dieselbe Datenbank wie der laufende
 Server (craftbeerpi.db). Zwei Dinge sind damit nicht getrennt:
 
-- Der Port. Laeuft der normale Server, belegt er den Port aus der
-  Datenbank - dann startet der Entwicklungsserver nicht. Mit
+- Der Port. Laeuft der normale Server, belegt er den Port aus
+  ``CBPI_PORT`` - dann startet der Entwicklungsserver nicht. Mit
   ``--port`` laeuft er auf einem anderen Port, die Datenbank bleibt
   aber dieselbe.
 - Die Migrationen. Sie laufen beim Start und werden in der Datenbank
@@ -73,7 +73,6 @@ import argparse
 import os
 import signal
 import socket
-import sqlite3
 import subprocess
 import sys
 import time
@@ -135,21 +134,13 @@ def interpreter():
 
 # --- Port ------------------------------------------------------------------
 
-def port_from_db():
-    """Der Port aus der Datenbank - oder None, wenn keiner steht."""
-    db_path = os.path.join(ROOT, "craftbeerpi.db")
-    if not os.path.isfile(db_path):
+def port_from_env():
+    """Der Port aus CBPI_PORT - oder None, wenn keiner (gueltig) gesetzt ist."""
+    raw = os.environ.get("CBPI_PORT")
+    if not raw:
         return None
     try:
-        db = sqlite3.connect(db_path)
-        row = db.execute("SELECT value FROM config WHERE name='port'").fetchone()
-        db.close()
-    except sqlite3.Error:
-        return None
-    if not row:
-        return None
-    try:
-        return int(str(row[0]).strip())
+        return int(str(raw).strip())
     except (TypeError, ValueError):
         return None
 
@@ -237,8 +228,8 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--port", type=int, default=None,
-                        help="Port des Servers (Vorgabe: der Port aus "
-                             "der Datenbank).")
+                        help="Port des Servers (Vorgabe: CBPI_PORT, sonst "
+                             "5000).")
     parser.add_argument("--log-level", default=None,
                         help="Log-Level: DEBUG, INFO, WARNING, ERROR. "
                              "Vorgabe: DEBUG")
@@ -256,7 +247,7 @@ def main():
     install_signal_handlers()
 
     python = interpreter()
-    port = args.port or port_from_db() or 5000
+    port = args.port or port_from_env() or 5000
     log_level = (args.log_level or os.environ.get("CBPI_LOG_LEVEL")
                  or "DEBUG").upper()
 

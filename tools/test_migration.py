@@ -11,7 +11,9 @@ Geprueft wird:
    3_port_config.sql, weil os.listdir() die Reihenfolge des
    Dateisystems liefert - die Datei wollte in schema_info eintragen,
    obwohl die Tabelle noch nicht existierte. Der Fehler liess die
-   Datei zurueckrollen und damit auch den Port-Eintrag.
+   Datei zurueckrollen und damit auch den Port-Eintrag. (Der
+   Port-Parameter selbst ist inzwischen wieder entfernt, siehe
+   7_remove_port_config.sql.)
 3. Ein zweiter Start fuehrt nichts erneut aus.
 4. Eine neue Migrationsdatei laeuft, die alten werden uebersprungen.
 5. Fehler landen im Log und nicht auf stdout.
@@ -96,12 +98,11 @@ def run():
         check("schema_info hat die erwartete Version", versions == expected,
               "%s, erwartet %s" % (versions, expected))
 
-        # Die Zeilen aus den Migrationen muessen da sein
+        # Der Port-Parameter wird von 7_remove_port_config.sql wieder
+        # entfernt - der Port kommt nur noch aus CBPI_PORT.
         port = db.execute("SELECT value FROM config WHERE name='port'").fetchone()
-        check("port-Config aus 3_port_config.sql vorhanden", port is not None,
-              repr(port))
-        check("port-Config hat den Wert 5000",
-              port is not None and str(port[0]) == "5000", repr(port))
+        check("port-Config wurde entfernt (7_remove_port_config.sql)",
+              port is None, repr(port))
 
         buzzer = db.execute("SELECT options FROM config WHERE name='buzzer'").fetchone()
         check("Buzzer-Optionen aus 2_more_buzzer.sql vorhanden",

@@ -1,0 +1,12 @@
+-- Den Parameter "Port to run server (requires restart)" entfernen.
+--
+-- Der Port wird beim Start aus CBPI_PORT gelesen (run.py) und hat sonst
+-- den Vorgabewert 5000. Der Eintrag in der config-Tabelle war eine
+-- zweite, verwirrende Quelle: im Container bindet docker-compose das
+-- Port-Mapping an CBPI_PORT, ein anderer Wert in der Datenbank haette
+-- das Mapping unbrauchbar gemacht.
+--
+-- Die Zeile stammt aus 3_port_config.sql. Jene Datei bleibt als Teil der
+-- Versionsgeschichte liegen, denn bestehende Installationen haben sie
+-- bereits ausgefuehrt. Diese Migration raeumt den Parameter auf.
+DELETE FROM config WHERE name = 'port';
