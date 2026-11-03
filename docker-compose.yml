@@ -40,12 +40,12 @@ services:
     init: true
     restart: unless-stopped
     ports:
-      - "${CBPI_PORT:-5000}:${CBPI_PORT:-5000}"
+      - "${CBPI_PORT:-5000}:5000"
     environment:
       # Der Port hat im Container Vorrang vor dem Wert aus der
       # Datenbank, sonst passt das Port-Mapping nicht zum laufenden
       # Server.
-      CBPI_PORT: "${CBPI_PORT:-5000}"
+      CBPI_PORT: "5000"
       TZ: "${TZ:-Europe/Berlin}"
     volumes:
       - ./data:/usr/src/app/data
