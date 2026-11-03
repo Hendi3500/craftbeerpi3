@@ -5,7 +5,7 @@ craftbeerpi.db
 *.pyc
 *.templog
 .opencode
-
+.claude
 # PID-Datei des Server-Verwaltungsskripts (tools/serverctl.sh). Sie
 # enthaelt die Prozess-ID des laufenden Servers und gehoert zum laufenden
 # Betrieb - auf einem anderen Rechner ist sie falsch.
